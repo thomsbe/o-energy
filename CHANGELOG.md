@@ -73,6 +73,10 @@ HTMX-Web-Oberfläche.
 - `refreshExpiresIn` wird als Millisekunden interpretiert (20 Tage statt 57 Jahre).
 - Der Grundpreis wird als EUR- oder Cent-Wert erkannt (10,21 €/Monat).
 
+### Lizenz
+
+- Das Projekt steht unter der **MIT-Lizenz** (`LICENSE`, `project.license = "MIT"`).
+
 ### Sicherheit
 
 - Der Container läuft als nicht-root Benutzer (uid/gid 1000).

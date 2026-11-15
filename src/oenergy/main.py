@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         description="Dashboard für Octopus Energy Germany (Dynamic Octopus)",
         version=__version__,
+        license_info={"name": "MIT"},
         lifespan=lifespan,
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

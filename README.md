@@ -1,6 +1,6 @@
 # o-energy
 
-> **Version 0.8.0 (Beta)** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md).
+> **Version 0.8.0 (Beta)** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
 
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
 Kraken-GraphQL-API regelmäßig ab, speichert Verbrauch, Zählerstände, Preise und
@@ -241,6 +241,10 @@ uv run ruff check .      # Linting
 uv run ruff format .     # Formatierung
 uv run alembic revision --autogenerate -m "…"   # Migration
 ```
+
+## Lizenz
+
+MIT – siehe [LICENSE](LICENSE).
 
 ## Hinweise
 
