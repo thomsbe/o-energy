@@ -29,6 +29,12 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 - Die Tabelle „Zählerstände“ auf der Verbrauchsseite war immer leer, weil sie
   die Rohzählerstände zeigte statt der tatsächlich gemessenen Intervalle.
+- **Veraltete Dateien im Browser/CDN-Cache**: der Service Worker lieferte die
+  alte `app.js` aus seinem Cache aus, dadurch blieb eine veraltete
+  Service-Worker-Registrierung aktiv und `navigator.serviceWorker.ready` löste
+  nie auf (die Push-Anmeldung blieb ohne Wirkung). Jetzt: eigene Dateien werden
+  netz-first geladen, alle Asset-URLs tragen einen Versionsparameter und der
+  Service Worker wird ohne HTTP-Cache aktualisiert.
 
 ## [1.1.0] – 2026-11-15
 

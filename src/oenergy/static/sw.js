@@ -5,7 +5,7 @@
  * - Für Seiten gilt "network first": online wird immer frisch geladen, offline
  *   kommt die zuletzt gecachte Seite.
  */
-const CACHE = "oenergy-v1";
+const CACHE = "oenergy-v2";
 const ASSETS = [
   "/static/css/app.css",
   "/static/js/app.js",
@@ -63,19 +63,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // statische Dateien: Cache zuerst
+  // Die eigenen Dateien (app.js, css) werden zuerst vom Netz geholt, damit
+  // Updates sofort ankommen; nur bei Offline-Betrieb kommt der Cache.
+  // Die Vendor-Dateien (htmx, Chart.js) sind stabil und kommen aus dem Cache.
+  const isVendor = url.pathname.startsWith("/static/vendor/");
+
   event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ||
-        fetch(request).then((response) => {
+    caches.match(request).then((cached) => {
+      if (cached && isVendor) {
+        return cached;
+      }
+      return fetch(request, isVendor ? {} : { cache: "no-cache" })
+        .then((response) => {
           if (response.ok && url.pathname.startsWith("/static/")) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
           }
           return response;
-        }),
-    ),
+        })
+        .catch(() => cached);
+    }),
   );
 });
 

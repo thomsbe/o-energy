@@ -5,18 +5,19 @@
   <title>{% block title %}o-energy{% endblock %} · Octopus Energy</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
+  <meta name="app-version" content="{{ app_version }}">
   <meta name="description" content="Verbrauch, Preise und Kosten des Octopus-Energy-Tarifs Dynamic Octopus">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="o-energy">
   <link rel="manifest" href="{{ url_for('static', path='/manifest.webmanifest') }}">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/apple-touch-icon.png') }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+  <link rel="apple-touch-icon" href="{{ asset('/icons/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ asset('/css/app.css') }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐙</text></svg>">
-  <script src="{{ url_for('static', path='/vendor/htmx.min.js') }}" defer></script>
-  <script src="{{ url_for('static', path='/vendor/chart.umd.js') }}" defer></script>
-  <script src="{{ url_for('static', path='/js/app.js') }}" defer></script>
+  <script src="{{ asset('/vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ asset('/vendor/chart.umd.js') }}" defer></script>
+  <script src="{{ asset('/js/app.js') }}" defer></script>
   <script>
     (function () {
       var stored = localStorage.getItem('oenergy-theme');

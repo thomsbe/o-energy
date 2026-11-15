@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from oenergy import __version__
 from oenergy.config import get_settings
 from oenergy.db.base import get_database, get_session
 from oenergy.db.models import Bill
@@ -42,6 +43,19 @@ def _localtime(value):
 
 
 templates.env.globals["localtime"] = _localtime
+templates.env.globals["app_version"] = __version__
+
+
+def _asset(path: str) -> str:
+    """Asset-URL mit Versionsparameter.
+
+    Ohne den Parameter liefern Browser und CDNs (Cloudflare) alte Dateien aus
+    dem Cache - nach einem Update bliebe eine veraltete App im Umlauf.
+    """
+    return f"/static{path}?v={__version__}"
+
+
+templates.env.globals["asset"] = _asset
 templates.env.globals["current_user"] = current_user
 templates.env.globals["auth_enabled"] = lambda: auth_enabled(get_settings())
 

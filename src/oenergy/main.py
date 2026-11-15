@@ -21,6 +21,20 @@ from oenergy.web.webauthn_routes import router as webauthn_router
 PACKAGE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_DIR / "static"
 
+#: Dateien, die nicht aus dem HTTP-Cache kommen dürfen - sonst bleibt eine
+#: veraltete Version des Service Workers oder der App aktiv.
+NO_CACHE_FILES = ("sw.js", "app.js", "app.css")
+
+
+class AppStaticFiles(StaticFiles):
+    """Statische Dateien ohne HTTP-Cache für die Teile, die sich schnell ändern."""
+
+    async def get_response(self, path, scope):  # type: ignore[no-untyped-def]
+        response = await super().get_response(path, scope)
+        if str(path).endswith(NO_CACHE_FILES):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
 
 def _check_token(database) -> None:
     """Warn when the refresh token is about to expire (a new login is needed)."""
@@ -71,7 +85,7 @@ def create_app() -> FastAPI:
         license_info={"name": "MIT"},
         lifespan=lifespan,
     )
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/static", AppStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)
     app.include_router(webauthn_router)
     app.include_router(push_router)

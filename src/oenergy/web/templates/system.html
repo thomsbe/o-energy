@@ -485,6 +485,11 @@
     var status = document.getElementById("push-status");
     if (!list || !enableButton) { return; }
 
+    function appVersion() {
+      var meta = document.querySelector('meta[name="app-version"]');
+      return meta ? meta.getAttribute("content") : "0";
+    }
+
     function withTimeout(promise, ms) {
       return Promise.race([
         promise,
@@ -536,8 +541,12 @@
           status.textContent = "Berechtigung nicht erteilt.";
           return;
         }
-        var registration = await withTimeout(navigator.serviceWorker.ready, 8000);
+        var registration = await withTimeout(navigator.serviceWorker.getRegistration("/"), 8000);
+        if (!registration) {
+          registration = await withTimeout(navigator.serviceWorker.register("/sw.js?v=" + appVersion(), { updateViaCache: "none" }), 8000);
+        }
         if (!registration) { throw new Error("Service Worker nicht bereit - Seite einmal neu laden"); }
+        await withTimeout(registration.pushManager.ready, 5000);
         var keyResponse = await fetch("/api/push/key");
         var keyData = await keyResponse.json();
         if (!keyResponse.ok) { throw new Error(keyData.error || "kein Schlüssel"); }

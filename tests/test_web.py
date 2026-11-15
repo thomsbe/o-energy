@@ -245,3 +245,13 @@ def test_bypass_token_header(client, monkeypatch) -> None:
     # ohne das Header (oder mit dem falschen) wird umgeleitet
     response = client.get("/kosten", headers={"Host": "strom.tbaer.de"}, follow_redirects=False)
     assert response.status_code == 303
+
+
+def test_assets_are_versioned_for_cache_busting(client) -> None:
+    """Ohne Versionsparameter liefern Browser und CDNs alte Dateien aus."""
+    import re
+
+    html = client.get("/").text
+    urls = re.findall(r'(?:src|href)="(/static/[^"]+)"', html)
+    assert urls
+    assert all("?v=" in url for url in urls), urls

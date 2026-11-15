@@ -30,11 +30,30 @@
   }
 
   // ------------------------------------------------------- Service Worker
+  function appVersion() {
+    var meta = document.querySelector('meta[name="app-version"]');
+    return meta ? meta.getAttribute("content") : "0";
+  }
+
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) { return; }
-    navigator.serviceWorker.register("/sw.js").catch(function () {
-      /* offline-Fähigkeit ist optional */
-    });
+    navigator.serviceWorker
+      .getRegistrations()
+      .then(function (registrations) {
+        // veraltete Registrierungen (z.B. aus /static/) entfernen
+        registrations.forEach(function (registration) {
+          if (registration.scope !== location.origin + "/") {
+            registration.unregister();
+          }
+        });
+      })
+      .catch(function () {})
+      .then(function () {
+        return navigator.serviceWorker.register("/sw.js?v=" + appVersion(), { updateViaCache: "none" });
+      })
+      .catch(function () {
+        /* offline-Fähigkeit ist optional */
+      });
   }
 
   // --------------------------------------------------------------- helpers
