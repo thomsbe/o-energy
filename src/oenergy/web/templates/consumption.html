@@ -73,33 +73,29 @@
 <section class="panel">
   <header class="panel-head">
     <h2>Zählerstände</h2>
-    <span class="panel-sub">letzte {{ readings | length }} Rohdaten</span>
+    <span class="panel-sub">zuletzt gemessene Intervalle</span>
   </header>
   {% if readings %}
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Zeitpunkt</th>
-          <th class="num">Zählerstand</th>
-          <th>Register</th>
-          <th>Art</th>
-          <th>Herkunft</th>
-          <th>Eingang</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in readings %}
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
           <tr>
-            <td>{{ row.read_at.strftime('%d.%m.%Y %H:%M') }}</td>
-            <td class="num">{{ "%.3f"|format(row.value) }}</td>
-            <td class="muted">{{ row.obis or '–' }}</td>
-            <td>{{ row.type_of_read or '–' }}</td>
-            <td class="muted">{{ row.origin or '–' }}</td>
-            <td class="muted">{{ row.received_at.strftime('%d.%m. %H:%M') }}</td>
+            <th>Intervall</th>
+            <th class="num">kWh</th>
+            <th>Quelle</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for row in readings %}
+            <tr>
+              <td>{{ row.start.strftime('%d.%m.%Y %H:%M') }} – {{ row.end.strftime('%H:%M') }}</td>
+              <td class="num">{{ "%.3f"|format(row.kwh) }}</td>
+              <td class="muted">{{ row.source }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
     <p class="muted">Noch keine Zählerdaten synchronisiert.</p>
   {% endif %}

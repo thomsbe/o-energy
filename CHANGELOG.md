@@ -7,7 +7,28 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-Nichts vorbereitet.
+### Hinzugefügt
+
+- **Progressive Web App**: Manifest, Icons, Service Worker und eine Offline-Seite –
+  die App lässt sich auf dem Telefon installieren („Zum Home-Bildschirm“) und
+  startet im eigenen Fenster. Die statischen Dateien werden gecacht, die
+  API-Daten nie.
+- **Mobile-optimiertes Layout**: Kacheln im Zweispalten-Raster, scrollbare
+  Navigation, Tabellen waagerecht scrollbar, kleinere Diagramme, Safe-Area für
+  Notch-Geräte.
+- **Web-Push-Benachrichtigungen**: Meldet der Netzbetreiber die Daten des
+  Vortags, schickt die App eine Nachricht an das Telefon
+  („Neue Daten vom 14.11.: 8,5 kWh für 4,40 €“). Abonnement über die Seite
+  *System*, Testnachricht per Button. Die VAPID-Schlüssel werden automatisch
+  erzeugt und in der Datenbank abgelegt.
+- **Zugriff ohne Anmeldung für lokale Tests**: `AUTH_LOCAL_BYPASS` (Host und
+  Quelle müssen lokal sein) oder das Secret-Header `X-OEnergy-Token`
+  (`oenergy generate-token --write-env` – der Wert steht nur in der `.env`).
+
+### Behoben
+
+- Die Tabelle „Zählerstände“ auf der Verbrauchsseite war immer leer, weil sie
+  die Rohzählerstände zeigte statt der tatsächlich gemessenen Intervalle.
 
 ## [1.1.0] – 2026-11-15
 

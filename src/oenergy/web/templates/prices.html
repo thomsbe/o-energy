@@ -89,6 +89,7 @@
     <span class="panel-sub">nächste Slots</span>
   </header>
   {% if prices.upcoming %}
+    <div class="table-scroll">
     <table class="table">
       <thead>
         <tr><th>Von</th><th>Bis</th><th class="num">netto</th><th class="num">brutto</th></tr>
@@ -104,6 +105,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   {% else %}
     <p class="muted">Noch keine Preise synchronisiert.</p>
   {% endif %}

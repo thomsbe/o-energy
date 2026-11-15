@@ -297,6 +297,20 @@ class WebauthnCredential(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class PushSubscription(Base):
+    """Ein Web-Push-Abonnement (Browser oder Gerät)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(Text)
+    auth: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class AppSetting(Base):
     """Einstellungen der Anwendung, die nicht in der .env stehen."""
 

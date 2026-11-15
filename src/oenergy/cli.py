@@ -317,6 +317,29 @@ def cmd_set_password(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_token(args: argparse.Namespace) -> int:
+    """Erzeugt das Secret-Header für den Anmelde-Bypass (X-OEnergy-Token).
+
+    Der Wert wird nur in der .env gespeichert - niemals im Quellcode.
+    """
+    import secrets
+
+    from oenergy.services.transfer import write_env_value
+
+    token = secrets.token_urlsafe(32)
+    if args.write_env:
+        target = Path(args.env_file or ".env")
+        write_env_value(target, "AUTH_BYPASS_TOKEN", token)
+        print(f"Token in {target} geschrieben (AUTH_BYPASS_TOKEN).")
+        print("Nicht ins Repository übernehmen - die .env ist ignoriert.")
+        return 0
+
+    print("Diese Zeile in die .env übernehmen:")
+    print()
+    print(f"AUTH_BYPASS_TOKEN={token}")
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """Datenbestand als JSON exportieren (für Backups und Umzug)."""
     from oenergy.services.transfer import write_export
@@ -437,6 +460,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     set_password.add_argument("--env-file", default=".env", help="Zieldatei (Standard: .env)")
     set_password.set_defaults(func=cmd_set_password)
+
+    generate_token = sub.add_parser("generate-token", help="create the secret header for the login bypass")
+    generate_token.add_argument(
+        "--write-env", action="store_true", help="den Token direkt in die .env schreiben"
+    )
+    generate_token.add_argument("--env-file", default=".env", help="Zieldatei (Standard: .env)")
+    generate_token.set_defaults(func=cmd_generate_token)
 
     export = sub.add_parser("export", help="export the data as JSON (backup)")
     export.add_argument("--out", default=None, help="Zieldatei (Standard: data/backups/...)")

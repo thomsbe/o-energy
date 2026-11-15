@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     auth_secret: str | None = None
     session_max_age_days: int = 14
     cookie_secure: bool = False  # auf True setzen, wenn die App nur über HTTPS erreichbar ist
+    auth_local_bypass: bool = True  # localhost/127.0.0.1 ohne Anmeldung
+    auth_bypass_token: str | None = None  # optionales Secret-Header (X-OEnergy-Token)
 
     # --- WebAuthn / Passkey -----------------------------------------------
     webauthn_enabled: bool = True

@@ -102,10 +102,30 @@
 
 <section class="panel">
   <header class="panel-head">
+    <h2>Benachrichtigungen</h2>
+    <span class="panel-sub">Push-Nachricht, wenn die Daten des Vortags da sind</span>
+  </header>
+  <p class="panel-sub" style="margin-bottom:12px">
+    Nach dem Ausliefern der Zählerdaten (meist gegen 08:00 Uhr) schickt die App eine
+    Nachricht an das Gerät – zum Beispiel: „Neue Daten vom 14.11.: 8,5 kWh für 4,40 €“.
+  </p>
+  <div class="passkey-list" id="push-list">
+    <p class="muted">Wird geladen …</p>
+  </div>
+  <div class="panel-actions" style="margin-top:14px">
+    <button type="button" class="btn" id="push-enable">Benachrichtigungen aktivieren</button>
+    <button type="button" class="btn" id="push-test">Testnachricht senden</button>
+    <span class="muted" id="push-status"></span>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
     <h2>Zugang</h2>
     <span class="panel-sub">Token-Laufzeiten</span>
   </header>
   {% if token.logged_in %}
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr>
@@ -131,6 +151,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
     {% if token.needs_login %}
       <p class="panel-sub" style="margin-top:10px">
         Das Refresh-Token ist abgelaufen: einmal <code>oenergy login</code> ausführen
@@ -170,16 +191,19 @@
     <span class="panel-sub">Daten aus der Octopus-API</span>
   </header>
   {% if account_info.email or account_info.name %}
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr><td>Angemeldet als</td><td class="num">{{ account_info.name or '–' }}</td></tr>
         <tr><td>E-Mail</td><td class="num">{{ account_info.email or '–' }}</td></tr>
       </tbody>
     </table>
+    </div>
   {% endif %}
 
   {% for account in account_info.accounts %}
     <h3 class="panel-sub" style="margin-top:14px">Konto {{ account.number }}</h3>
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr><td>Anbieter</td><td class="num">{{ account.brand or '–' }}</td></tr>
@@ -191,6 +215,7 @@
         {% endif %}
       </tbody>
     </table>
+    </div>
   {% endfor %}
 
   {% for agreement in account_info.agreements %}
@@ -198,6 +223,7 @@
       Vertrag {{ agreement.id }} · {{ agreement.product_name or '–' }}
       {% if not agreement.is_active %}<span class="badge badge-awaiting">beendet</span>{% endif %}
     </h3>
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr><td>Produktcode</td><td class="num">{{ agreement.product_code or '–' }}</td></tr>
@@ -212,10 +238,12 @@
         <tr><td>USt</td><td class="num">{{ "%.0f"|format((agreement.vat_rate or 0) * 100) }} %</td></tr>
       </tbody>
     </table>
+    </div>
   {% endfor %}
 
   {% for prop in account_info.properties %}
     <h3 class="panel-sub" style="margin-top:14px">Lieferpunkt</h3>
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr><td>Adresse</td><td class="num">{{ prop.address or '–' }}</td></tr>
@@ -225,9 +253,11 @@
         <tr><td>Smart-Meter-Gateway</td><td class="num">{{ 'ja' if prop.has_smart_meter_gateway else 'nein' }}</td></tr>
       </tbody>
     </table>
+    </div>
   {% endfor %}
 
   {% for meter in account_info.meters %}
+    <div class="table-scroll">
     <table class="table table-compact">
       <tbody>
         <tr><td>Zähler (ID)</td><td class="num">{{ meter.id }} · {{ meter.number or '–' }}</td></tr>
@@ -245,6 +275,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
   {% endfor %}
 </section>
 
@@ -254,6 +285,7 @@
     <span class="panel-sub">Zeitfenster, die bereits bei der API abgefragt wurden</span>
   </header>
   {% if backfill.windows %}
+    <div class="table-scroll">
     <table class="table table-compact">
       <thead>
         <tr><th>Zähler</th><th>Von</th><th>Bis</th><th>Abgefragt</th><th class="num">Werte</th><th>Status</th></tr>
@@ -275,6 +307,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   {% else %}
     <p class="muted">Noch keine Abfragen protokoltiert.</p>
   {% endif %}
@@ -294,6 +327,7 @@
     <h2>Konfiguration</h2>
     <span class="panel-sub">aus .env</span>
   </header>
+  <div class="table-scroll">
   <table class="table">
     <tbody>
       <tr><td>OCTOPUS_EMAIL</td><td class="num">{{ settings.octopus_email or '–' }}</td></tr>
@@ -310,6 +344,7 @@
       <tr><td>SCHEDULER_ENABLED</td><td class="num">{{ settings.scheduler_enabled }}</td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 
 
@@ -443,3 +478,95 @@
   })();
 </script>
 {% endblock %}
+
+<script>
+  (function () {
+    var list = document.getElementById("push-list");
+    var enableButton = document.getElementById("push-enable");
+    var testButton = document.getElementById("push-test");
+    var status = document.getElementById("push-status");
+    if (!list || !enableButton) { return; }
+
+    function urlBase64ToUint8Array(base64String) {
+      var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      var raw = atob(base64);
+      var output = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) { output[i] = raw.charCodeAt(i); }
+      return output;
+    }
+
+    async function load() {
+      try {
+        var response = await fetch("/api/push/status");
+        var data = await response.json();
+        if (!response.ok) { throw new Error(data.error || "nicht angemeldet"); }
+        list.innerHTML = "";
+        var info = document.createElement("div");
+        info.className = "passkey-item";
+        var name = document.createElement("span");
+        name.className = "passkey-name";
+        name.textContent = data.subscriptions + " Gerät(e) angemeldet";
+        var meta = document.createElement("span");
+        meta.className = "passkey-meta";
+        meta.textContent = data.last_success
+          ? "zuletzt zugestellt " + new Date(data.last_success).toLocaleString("de-DE")
+          : "noch keine Nachricht zugestellt";
+        info.appendChild(name);
+        info.appendChild(meta);
+        list.appendChild(info);
+      } catch (error) {
+        list.innerHTML = '<p class="muted">Status konnte nicht geladen werden.</p>';
+      }
+    }
+
+    enableButton.addEventListener("click", async function () {
+      if (!("PushManager" in window) || !("Notification" in window)) {
+        status.textContent = "Dieser Browser unterstützt keine Push-Nachrichten.";
+        return;
+      }
+      try {
+        var permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          status.textContent = "Berechtigung nicht erteilt.";
+          return;
+        }
+        var registration = await navigator.serviceWorker.ready;
+        var keyResponse = await fetch("/api/push/key");
+        var keyData = await keyResponse.json();
+        if (!keyResponse.ok) { throw new Error(keyData.error || "kein Schlüssel"); }
+
+        var subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyData.key),
+        });
+        var response = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subscription),
+        });
+        if (!response.ok) { throw new Error("Abonnement fehlgeschlagen"); }
+        status.textContent = "Benachrichtigungen sind aktiv.";
+        load();
+      } catch (error) {
+        status.textContent = "Fehler: " + error;
+      }
+    });
+
+    testButton.addEventListener("click", async function () {
+      testButton.disabled = true;
+      try {
+        var response = await fetch("/api/push/test", { method: "POST" });
+        var data = await response.json();
+        status.textContent = response.ok
+          ? "Testnachricht an " + data.delivered + " Gerät(e) gesendet."
+          : "Fehler: " + (data.error || "unbekannt");
+      } catch (error) {
+        status.textContent = "Fehler: " + error;
+      }
+      testButton.disabled = false;
+    });
+
+    load();
+  })();
+</script>

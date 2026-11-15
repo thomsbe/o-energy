@@ -242,6 +242,8 @@ wird beim ersten Start erzeugt und in der Datenbank abgelegt – es bleibt also
 | `AUTH_USERNAME` | `admin` | Benutzername |
 | `AUTH_PASSWORD_HASH` | – | Argon2id-Hash (siehe `oenergy set-password`) |
 | `AUTH_SECRET` | – | optional: eigenes Secret für die Sitzungs-Cookies |
+| `AUTH_LOCAL_BYPASS` | `true` | Zugriffe ohne Anmeldung, wenn **Host und Quelle** lokal sind |
+| `AUTH_BYPASS_TOKEN` | – | optionales Secret-Header `X-OEnergy-Token` für Skripte |
 | `SESSION_MAX_AGE_DAYS` | `14` | Gültigkeit der Sitzung |
 | `COOKIE_SECURE` | `false` | auf `true` setzen, wenn die App nur über HTTPS erreichbar ist |
 
@@ -250,6 +252,19 @@ mit einem gelben Hinweis darauf hin. **Für einen Betrieb im Internet
 (Cloudflare Tunnel, Portfreigabe) muss ein Passwort gesetzt sein** – sonst sind
 Verbrauchsdaten, Konto- und Zählernummer sowie die Adresse für jeden erreichbar,
 der die URL kennt.
+
+### Zugriff ohne Anmeldung (für Tests)
+
+```bash
+uv run oenergy generate-token --write-env   # schreibt AUTH_BYPASS_TOKEN in die .env
+curl -H "X-OEnergy-Token: $(grep BYPASS_TOKEN .env | cut -d= -f2-)" http://127.0.0.1:8000/
+```
+
+Der Token steht **nur** in der `.env` (im Repository ignoriert) und wird nie
+ausgegeben. Alternativ greift `AUTH_LOCAL_BYPASS`: Aufrufe, bei denen **sowohl**
+der Host als auch die Quelle lokal sind (`localhost`/`127.0.0.1`), kommen ohne
+Anmeldung durch – ein Aufruf über den Cloudflare-Tunnel also **nicht**, weil
+dort der Host die öffentliche Adresse ist.
 
 ### Passkeys (WebAuthn)
 

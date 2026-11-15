@@ -114,3 +114,38 @@ def test_passkey_login_is_reachable_without_a_session(client, monkeypatch) -> No
     # die Registrierung bleibt geschützt
     response = client.post("/api/auth/passkey/register/options", follow_redirects=False)
     assert response.status_code == 401
+
+
+def test_push_subscription_round_trip(session) -> None:
+    from oenergy.services import push
+
+    key = push.public_key(session)
+    assert key
+
+    push.subscribe(
+        session,
+        {
+            "endpoint": "https://push.example/abc",
+            "keys": {"p256dh": "p256dh-value", "auth": "auth-value"},
+        },
+    )
+    assert len(push.subscriptions(session)) == 1
+
+    # ein zweites Abonnement mit gleichem Endpoint wird aktualisiert, nicht verdoppelt
+    push.subscribe(
+        session,
+        {
+            "endpoint": "https://push.example/abc",
+            "keys": {"p256dh": "p256dh-value", "auth": "auth-value"},
+        },
+    )
+    assert len(push.subscriptions(session)) == 1
+
+    assert push.unsubscribe(session, "https://push.example/abc") is True
+    assert push.subscriptions(session) == []
+
+
+def test_push_without_subscriptions_does_nothing(session) -> None:
+    from oenergy.services import push
+
+    assert push.send(session, "o-energy", "Test") == 0

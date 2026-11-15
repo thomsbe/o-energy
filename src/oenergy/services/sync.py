@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from oenergy.api import queries
@@ -32,10 +33,47 @@ def job_prices(session: Session, client: KrakenClient, settings: Settings) -> in
     return prices.sync_prices(session, client, settings)
 
 
+def _final_days(session: Session) -> set:
+    """Die Tage, für die es endgültige Werte gibt."""
+    from oenergy.db.models import DailyStat
+
+    return {stat.day for stat in session.scalars(select(DailyStat)) if stat.is_final}
+
+
+def _notify_new_days(session: Session, settings: Settings, before: set, after: set) -> int:
+    """Für neu hinzugekommene Tage eine Push-Nachricht schicken."""
+    new_days = sorted(after - before)
+    if not new_days:
+        return 0
+
+    from oenergy.db.models import DailyStat
+    from oenergy.services import push
+
+    stats = {stat.day: stat for stat in session.scalars(select(DailyStat).where(DailyStat.day.in_(new_days)))}
+    delivered = 0
+    for day in new_days:
+        stat = stats.get(day)
+        if stat is None:
+            continue
+        kwh = stat.kwh or 0.0
+        cost = (stat.cost_cents or 0.0) / 100
+        body = f"Neue Daten vom {day.strftime('%d.%m.%Y')}: {kwh:.1f} kWh für {cost:.2f} €"
+        logger.info("Push-Nachricht: {}", body)
+        delivered += push.send(session, "o-energy", body, url="/verbrauch")
+    return delivered
+
+
 def job_readings(session: Session, client: KrakenClient, settings: Settings) -> int:
+    before = _final_days(session)
     stored = consumption.sync_readings(session, client, settings)
     costs.compute_costs(session, settings)
     completeness.recompute(session, settings)
+    after = _final_days(session)
+    if after - before:
+        try:
+            _notify_new_days(session, settings, before, after)
+        except Exception as exc:
+            logger.warning("Push-Benachrichtigung fehlgeschlagen: {}", exc)
     return stored
 
 

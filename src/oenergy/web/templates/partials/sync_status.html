@@ -1,4 +1,5 @@
 {% if runs %}
+  <div class="table-scroll">
   <table class="table table-compact">
     <thead>
       <tr><th>Job</th><th>Start</th><th>Ende</th><th class="num">Einträge</th><th>Status</th><th>Meldung</th></tr>
@@ -20,6 +21,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% else %}
   <p class="muted">Noch keine Sync-Läufe.</p>
 {% endif %}

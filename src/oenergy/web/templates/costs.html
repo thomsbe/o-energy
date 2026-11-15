@@ -66,6 +66,7 @@
     <span class="panel-sub">Ist-Kosten aus dem Kundenkonto</span>
   </header>
   {% if bills %}
+    <div class="table-scroll">
     <table class="table">
       <thead>
         <tr><th>Zeitraum</th><th>Rechnung</th><th class="num">Betrag</th></tr>
@@ -83,6 +84,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   {% else %}
     <p class="muted">Noch keine Rechnungen synchronisiert.</p>
   {% endif %}

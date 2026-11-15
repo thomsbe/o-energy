@@ -202,6 +202,10 @@ docker compose logs -f
 - Das Compose-Profil `worker` ist eine **Alternative**, nie zusätzlich
   (doppelte Abfragen, Rate-Limit).
 - Ohne `AUTH_PASSWORD_HASH` ist die App **offen** (Hinweis in der Kopfzeile).
+  Für lokale Tests gibt es zwei Ausnahmen: `AUTH_LOCAL_BYPASS` (nur wenn **Host**
+  *und* Peer-Adresse lokal sind – ein Tunnel kommt ebenfalls von 127.0.0.1!) und
+  das optionale Secret-Header `X-OEnergy-Token` (`AUTH_BYPASS_TOKEN`, erzeugt mit
+  `oenergy generate-token --write-env` – **niemals** im Quellcode).
   Für den Betrieb im Internet: `uv run oenergy set-password` und den Hash in
   die `.env` eintragen; bei reinem HTTPS `COOKIE_SECURE=true`.
 - Passkeys: Registrierung auf der Seite *System*, RP-ID/Origin aus

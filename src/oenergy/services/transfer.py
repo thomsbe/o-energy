@@ -353,3 +353,19 @@ def _import_reading_windows(session: Session, rows: list[dict[str, Any]]) -> int
             "status": "status",
         },
     )
+
+
+def write_env_value(target: str | Path, key: str, value: str) -> Path:
+    """Schreibt einen Schlüssel in eine .env-Datei (Compose-tauglich escaped)."""
+    path = Path(target)
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    entry = f"{key}={value.replace('$', '$$')}"
+    for index, line in enumerate(lines):
+        if line.startswith(f"{key}=") or line.startswith(f"# {key}="):
+            lines[index] = entry
+            break
+    else:
+        lines.append(entry)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path

@@ -29,6 +29,14 @@
     }
   }
 
+  // ------------------------------------------------------- Service Worker
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) { return; }
+    navigator.serviceWorker.register("/static/sw.js").catch(function () {
+      /* offline-Fähigkeit ist optional */
+    });
+  }
+
   // --------------------------------------------------------------- helpers
   const charts = {};
 
@@ -479,6 +487,7 @@
   // ------------------------------------------------------------------ init
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
+    registerServiceWorker();
     renderPrices();
     renderConsumption();
     renderConsumptionPrice();

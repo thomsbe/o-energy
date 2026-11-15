@@ -144,7 +144,7 @@ def page_consumption(request: Request, session: Session = Depends(get_session)) 
             "active": "consumption",
             "agreement": dashboard.agreement_info(session, settings),
             "consumption": dashboard.consumption_summary(session, settings),
-            "readings": dashboard.meter_readings(session, 60),
+            "readings": dashboard.interval_rows(session, settings, 60),
             "prices": dashboard.price_overview(session, settings),
             "consumption_price": dashboard.consumption_with_price(session, settings, days=2),
             "month_days": dashboard.daily_consumption(session, settings, year, month),

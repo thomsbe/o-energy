@@ -181,3 +181,58 @@ def test_system_page_renders_the_passkey_script(client, seeded) -> None:
     assert "passkey-register" in html
     assert "/api/auth/passkeys" in html
     assert "navigator.credentials.create" in html
+
+
+def test_local_requests_bypass_the_login(client, monkeypatch) -> None:
+    """localhost/127.0.0.1 kommt ohne Anmeldung durch - der Tunnel nicht."""
+    from oenergy.config import get_settings
+    from oenergy.web.auth import hash_password
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_username", "admin")
+    monkeypatch.setattr(settings, "auth_password_hash", hash_password("geheim123"))
+    monkeypatch.setattr(settings, "auth_local_bypass", True)
+
+    # die Bypass-Logik selbst: Host UND Peer müssen lokal sein
+    from oenergy.web.auth import is_local_request
+
+    lokal = {"client": ("127.0.0.1", 54321)}
+    tunnel = {"client": ("127.0.0.1", 54321)}  # auch ein Tunnel kommt von lokal
+
+    assert is_local_request(lokal, "localhost:8000") is True
+    assert is_local_request(lokal, "127.0.0.1:8000") is True
+    # IPv4-mapped IPv6 (uvicorn auf ::)
+    assert is_local_request({"client": ("::ffff:127.0.0.1", 1)}, "127.0.0.1:8000") is True
+    # über den Tunnel ist der Host die öffentliche Adresse -> kein Bypass
+    assert is_local_request(tunnel, "strom.tbaer.de") is False
+    # und von außen ist auch der Host local nicht genug
+    assert is_local_request({"client": ("203.0.113.7", 40000)}, "localhost") is False
+
+    # über den Tunnel: der Host ist die öffentliche Adresse -> Login nötig
+    response = client.get("/kosten", headers={"Host": "strom.tbaer.de"}, follow_redirects=False)
+    assert response.status_code == 303
+    assert "/login" in response.headers["location"]
+
+
+def test_bypass_token_header(client, monkeypatch) -> None:
+    from oenergy.config import get_settings
+    from oenergy.web.auth import hash_password
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_username", "admin")
+    monkeypatch.setattr(settings, "auth_password_hash", hash_password("geheim123"))
+    monkeypatch.setattr(settings, "auth_local_bypass", False)
+    monkeypatch.setattr(settings, "auth_bypass_token", "geheim-token")
+
+    response = client.get(
+        "/kosten",
+        headers={"Host": "strom.tbaer.de", "X-OEnergy-Token": "geheim-token"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 200
+
+    # ohne das Header (oder mit dem falschen) wird umgeleitet
+    response = client.get("/kosten", headers={"Host": "strom.tbaer.de"}, follow_redirects=False)
+    assert response.status_code == 303

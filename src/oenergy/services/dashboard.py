@@ -662,6 +662,26 @@ def backfill_overview(session: Session, settings: Settings) -> dict:
     }
 
 
+def interval_rows(session: Session, settings: Settings, limit: int = 60) -> list[dict]:
+    """Die zuletzt gemessenen Verbrauchsintervalle."""
+    tz = ZoneInfo(settings.timezone)
+    meter_id = active_meter_id(session, settings)
+    query = select(Interval).order_by(Interval.slot_start.desc()).limit(limit)
+    if meter_id is not None:
+        query = query.where(Interval.meter_id == meter_id)
+    rows = list(session.scalars(query))
+    return [
+        {
+            "meter_id": row.meter_id,
+            "start": to_local(row.slot_start, tz),
+            "end": to_local(row.slot_end, tz),
+            "kwh": row.kwh,
+            "source": row.source,
+        }
+        for row in reversed(rows)
+    ]
+
+
 def meter_readings(session: Session, limit: int = 50) -> list[dict]:
     tz = settings_tz()
     rows = list(session.scalars(select(MeterReading).order_by(MeterReading.read_at.desc()).limit(limit)))

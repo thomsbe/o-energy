@@ -33,6 +33,29 @@ PUBLIC_PATHS = ("/login", "/api/health", "/favicon.ico")
 #: Middleware eine Umleitung auf das Login-Formular statt JSON.
 PUBLIC_PREFIXES = ("/api/auth/passkey/login",)
 
+#: Hostnamen, die auf den lokalen Rechner zeigen
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0")
+
+
+def is_local_request(scope: dict, host_header: str | None) -> bool:
+    """True, wenn die Anfrage direkt an den lokalen Rechner ging.
+
+    Es werden **beide** Bedingungen geprüft: der Host-Header *und* die
+    Peer-Adresse. Der alleinige Check der Peer-Adresse wäre unsicher, weil ein
+    Reverse-Proxy oder ein Tunnel ebenfalls von 127.0.0.1 kommt.
+    """
+    host = (host_header or "").split(":")[0].strip().lower()
+    if host.startswith("::ffff:"):
+        host = host[7:]
+    if host not in LOCAL_HOSTS:
+        return False
+    client = scope.get("client")
+    peer = client[0] if client else ""
+    if peer.startswith("::ffff:"):
+        # IPv4-mapped IPv6-Adresse (uvicorn auf ::)
+        peer = peer[7:]
+    return peer in ("127.0.0.1", "::1", "localhost")
+
 
 def hash_password(password: str) -> str:
     """Argon2id-Hash für ein Passwort."""
@@ -75,6 +98,19 @@ class RequireLoginMiddleware:
 
         path = scope.get("path", "")
         if is_public_path(path):
+            await self.app(scope, receive, send)
+            return
+
+        headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
+
+        # lokale Zugriffe (Tests, curl auf localhost) ohne Anmeldung
+        if self.settings.auth_local_bypass and is_local_request(scope, headers.get("host")):
+            await self.app(scope, receive, send)
+            return
+
+        # optionales Secret-Header für Skripte
+        token = self.settings.auth_bypass_token
+        if token and headers.get("x-oenergy-token") == token:
             await self.app(scope, receive, send)
             return
 
