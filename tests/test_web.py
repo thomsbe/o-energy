@@ -73,3 +73,17 @@ def test_consumption_price_endpoint(client, seeded) -> None:
     assert response.status_code == 200
     data = response.json()
     assert len(data["labels"]) == len(data["kwh"]) == len(data["price"])
+
+
+def test_export_endpoint_returns_a_gzip_download(client, seeded) -> None:
+    import gzip
+    import json
+
+    response = client.get("/api/export/data.json.gz")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["content-disposition"]
+
+    payload = json.loads(gzip.decompress(response.content))
+    assert payload["format"] == "o-energy-export"
+    assert payload["format_version"] == 1
+    assert payload["tables"]["intervals"]

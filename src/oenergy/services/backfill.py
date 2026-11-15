@@ -18,7 +18,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from itertools import pairwise
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from oenergy.config import Settings
@@ -154,6 +154,19 @@ def queried_windows(session: Session, meter_id: str) -> list[Window]:
     ]
 
 
+def data_start(session: Session, meter_id: str) -> datetime | None:
+    """Der früheste bekannte Verbrauchswert."""
+    return session.scalar(select(func.min(Interval.slot_start)).where(Interval.meter_id == meter_id))
+
+
+def history_exhausted(session: Session, meter_id: str) -> bool:
+    """True, wenn vor dem frühesten Wert keine weiteren Daten liegen."""
+    from oenergy.db.models import Meter
+
+    meter = session.get(Meter, meter_id)
+    return bool(meter and meter.history_exhausted)
+
+
 def has_data(session: Session, meter_id: str) -> bool:
     return (
         session.scalar(select(MeterReading.id).where(MeterReading.meter_id == meter_id).limit(1)) is not None
@@ -182,13 +195,24 @@ def plan_queries(
     now = now or datetime.utcnow()
     tz = ZoneInfo(settings.timezone)
 
-    horizon_days = (
-        settings.readings_history_days if not has_data(session, meter_id) else settings.readings_backfill_days
-    )
     # Only ask for values the utility could have delivered: the values of a day
     # arrive around 08:00 of the following day.
     delivered_until = _delivered_until(now, settings)
-    target = snap_to_days(now - timedelta(days=horizon_days), delivered_until, tz)
+
+    # Die Historie wird stückweise weiter zurückgeholt, bis die API keine
+    # weiteren Werte liefert (dann ist das Ende erreicht).
+    start = now - timedelta(days=settings.readings_backfill_days)
+    if not history_exhausted(session, meter_id):
+        # pro Lauf wird die Historie um readings_history_chunk_days zurückgeholt
+        chunk = now - timedelta(days=settings.readings_history_chunk_days)
+        known_start = data_start(session, meter_id)
+        if known_start is not None:
+            chunk = known_start - timedelta(days=settings.readings_history_chunk_days)
+        if settings.readings_history_max_days:
+            chunk = max(chunk, now - timedelta(days=settings.readings_history_max_days))
+        start = min(start, chunk)
+
+    target = snap_to_days(start, delivered_until, tz)
 
     coverage = merge_windows(data_windows(session, meter_id) + queried_windows(session, meter_id))
     gaps = subtract(target, coverage)

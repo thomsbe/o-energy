@@ -103,6 +103,24 @@ HTMX-Web-Oberfläche.
   Vor-/Zurück-Navigation über die Monate (endgültige Tage hell, provisorische
   dunkel). Tage ohne Zählerdaten werden als Lücke dargestellt, nicht als 0 kWh.
 
+### Erweitert (Review-Runde 3)
+
+- **Backfill bis zum Ende der Historie**: die App holt die Historie schrittweise
+  weiter zurück (30 Tage pro Lauf), bis die API keine Werte mehr liefert. Der
+  Zustand wird am Zähler vermerkt (`history_start`, `history_exhausted`) – danach
+  wird nicht mehr weitergefragt. Die verbleibende Historie steht auf der
+  System-Seite.
+- **System-Seite** zeigt jetzt die Daten aus der API: angemeldeter Nutzer,
+  Konto mit Anbieter, Status und Saldo, Verträge (Produktcode, Preisart,
+  Lieferpunkt, Grundpreis, USt), Lieferpunkt mit Adresse, MaLo- und
+  Zählernummer sowie den Stand der Datenhistorie.
+- **Export und Import**: der gesamte Datenbestand lässt sich als JSON exportieren
+  (`oenergy export`) und wieder zurückspielen (`oenergy import`). Das Format ist
+  schemaunabhängig und die Verarbeitung idempotent – ein Import ändert nichts
+  doppelt. Im Web gibt es den Export als Download auf der System-Seite.
+- Das Backup-Skript erstellt jetzt zusätzlich zum SQLite-Backup einen
+  JSON-Export und behält die 10 neuesten Sicherungen.
+
 ### Lizenz
 
 - Das Projekt steht unter der **MIT-Lizenz** (`LICENSE`, `project.license = "MIT"`).

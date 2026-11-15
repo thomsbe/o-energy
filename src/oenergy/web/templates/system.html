@@ -101,6 +101,107 @@
 
 <section class="panel">
   <header class="panel-head">
+    <h2>Daten sichern und wiederherstellen</h2>
+    <span class="panel-sub">Export und Import als JSON</span>
+  </header>
+  <p class="panel-sub" style="margin-bottom:10px">
+    Der Export enthält Verbrauch, Preise, Tageswerte, Rechnungen und die
+    Vertragsdaten in einem schemaunabhängigen JSON-Format. Damit lässt sich ein
+    Bestand auch nach einem Datenbankwechsel zurückspielen - und schneller
+    wiederherstellen als über die API.
+  </p>
+  <div class="panel-actions">
+    <a class="btn" href="/api/export/data.json.gz">Export herunterladen</a>
+    <span class="muted">Import: <code>uv run oenergy import &lt;datei&gt;</code></span>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Konto und Zähler</h2>
+    <span class="panel-sub">Daten aus der Octopus-API</span>
+  </header>
+  {% if account_info.email or account_info.name %}
+    <table class="table table-compact">
+      <tbody>
+        <tr><td>Angemeldet als</td><td class="num">{{ account_info.name or '–' }}</td></tr>
+        <tr><td>E-Mail</td><td class="num">{{ account_info.email or '–' }}</td></tr>
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% for account in account_info.accounts %}
+    <h3 class="panel-sub" style="margin-top:14px">Konto {{ account.number }}</h3>
+    <table class="table table-compact">
+      <tbody>
+        <tr><td>Anbieter</td><td class="num">{{ account.brand or '–' }}</td></tr>
+        <tr><td>Status</td><td class="num">{{ account.status or '–' }}</td></tr>
+        <tr><td>Rechnungsempfänger</td><td class="num">{{ account.billing_name or '–' }}</td></tr>
+        <tr><td>Saldo</td><td class="num">{{ "%.2f"|format((account.balance_cents or 0) / 100) }} €</td></tr>
+        {% if account.overdue_cents %}
+          <tr><td>Rückstand</td><td class="num">{{ "%.2f"|format(account.overdue_cents / 100) }} €</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {% endfor %}
+
+  {% for agreement in account_info.agreements %}
+    <h3 class="panel-sub" style="margin-top:14px">
+      Vertrag {{ agreement.id }} · {{ agreement.product_name or '–' }}
+      {% if not agreement.is_active %}<span class="badge badge-awaiting">beendet</span>{% endif %}
+    </h3>
+    <table class="table table-compact">
+      <tbody>
+        <tr><td>Produktcode</td><td class="num">{{ agreement.product_code or '–' }}</td></tr>
+        <tr><td>Preisart</td><td class="num">{{ 'dynamisch (Zeitzone)' if agreement.is_time_of_use else 'Festpreis' }}</td></tr>
+        <tr><td>Lieferpunkt</td><td class="num">{{ agreement.supply_point or '–' }} ({{ agreement.market or '–' }})</td></tr>
+        <tr><td>Grundpreis</td>
+            <td class="num">
+              {% if agreement.standing_charge_ct %}{{ "%.2f"|format(agreement.standing_charge_ct) }} ct/Monat
+              {% else %}–{% endif %}
+            </td>
+        </tr>
+        <tr><td>USt</td><td class="num">{{ "%.0f"|format((agreement.vat_rate or 0) * 100) }} %</td></tr>
+      </tbody>
+    </table>
+  {% endfor %}
+
+  {% for prop in account_info.properties %}
+    <h3 class="panel-sub" style="margin-top:14px">Lieferpunkt</h3>
+    <table class="table table-compact">
+      <tbody>
+        <tr><td>Adresse</td><td class="num">{{ prop.address or '–' }}</td></tr>
+        <tr><td>Marktlokation (MaLo)</td><td class="num">{{ prop.malo_number or '–' }}</td></tr>
+        <tr><td>Zählernummer</td><td class="num">{{ prop.meter_number or '–' }}</td></tr>
+        <tr><td>Zählernummer (melo)</td><td class="num">{{ prop.melo_number or '–' }}</td></tr>
+        <tr><td>Smart-Meter-Gateway</td><td class="num">{{ 'ja' if prop.has_smart_meter_gateway else 'nein' }}</td></tr>
+      </tbody>
+    </table>
+  {% endfor %}
+
+  {% for meter in account_info.meters %}
+    <table class="table table-compact">
+      <tbody>
+        <tr><td>Zähler (ID)</td><td class="num">{{ meter.id }} · {{ meter.number or '–' }}</td></tr>
+        <tr><td>Verbrauchszähler</td><td class="num">{{ meter.melo_number or '–' }}</td></tr>
+        <tr>
+          <td>Datenhistorie</td>
+          <td class="num">
+            {% if meter.history_start %}ab {{ meter.history_start.strftime('%d.%m.%Y') }}{% else %}–{% endif %}
+            {% if meter.history_exhausted %}
+              <span class="badge badge-final">vollständig</span>
+            {% else %}
+              <span class="badge badge-partial">wird nachgeladen</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <header class="panel-head">
     <h2>Automatisches Nachholen (Backfill)</h2>
     <span class="panel-sub">Zeitfenster, die bereits bei der API abgefragt wurden</span>
   </header>

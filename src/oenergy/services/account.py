@@ -24,7 +24,7 @@ def sync_account(session: Session, client: KrakenClient, settings: Settings) -> 
     viewer = (payload.get("data") or {}).get("viewer") or {}
     accounts = viewer.get("accounts") or []
     if not accounts:
-        logger.warning("No accounts returned for user %s", viewer.get("email"))
+        logger.warning("No accounts returned for user {}", viewer.get("email"))
         return None
 
     _store_identity(session, viewer)
@@ -101,7 +101,7 @@ def sync_properties(
 
     session.commit()
     if rows:
-        logger.info("Stored %s properties", len(rows))
+        logger.info("Stored {} properties", len(rows))
     return rows
 
 

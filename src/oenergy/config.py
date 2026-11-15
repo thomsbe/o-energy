@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     poll_interval_minutes: int = 15
     readings_backfill_days: int = 3
     readings_history_days: int = 30
+    readings_history_max_days: int = 0  # 0 = so weit zurück wie Daten vorhanden sind
+    readings_history_chunk_days: int = 30  # wie weit ein Lauf zurückgreift
     readings_max_window_days: int = 7
     gap_retry_minutes: int = 60
     price_backfill_hours: int = 72

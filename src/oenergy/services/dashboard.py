@@ -8,7 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from oenergy.config import Settings
-from oenergy.db.models import Agreement, DailyStat, Interval, MeterReading, Price
+from oenergy.db.models import (
+    Account,
+    Agreement,
+    DailyStat,
+    Interval,
+    Meter,
+    MeterReading,
+    Price,
+    Property,
+)
 from oenergy.services.account import active_meter_id
 from oenergy.services.completeness import data_state, expected_delivery_at
 from oenergy.services.pricing import PriceBook, compose_at, group_rates
@@ -523,6 +532,72 @@ def cheapest_windows(session: Session, settings: Settings, hours: int = 24, coun
         )
     slots.sort(key=lambda item: item["gross"])
     return slots[:count]
+
+
+def account_info(session: Session, settings: Settings) -> dict:
+    """Konto, Verträge, Lieferpunkt und Zähler - wie von der API geliefert."""
+    from oenergy.db.models import Token
+
+    token = session.get(Token, 1)
+    accounts = [
+        {
+            "number": row.number,
+            "brand": row.brand,
+            "status": row.status,
+            "billing_name": row.billing_name,
+            "billing_email": row.billing_email,
+            "balance_cents": row.balance_cents,
+            "overdue_cents": row.overdue_cents,
+        }
+        for row in session.scalars(select(Account).order_by(Account.number))
+    ]
+    agreements = [
+        {
+            "id": row.id,
+            "product_code": row.product_code,
+            "product_name": row.product_name,
+            "is_time_of_use": row.is_time_of_use,
+            "is_active": row.is_active,
+            "supply_point": row.supply_point_external_id,
+            "market": row.supply_point_market,
+            "valid_from": to_local(row.valid_from, ZoneInfo(settings.timezone)),
+            "standing_charge_ct": row.gross_monthly_standing_charge_ct,
+            "vat_rate": row.vat_rate,
+        }
+        for row in session.scalars(select(Agreement))
+    ]
+    properties = [
+        {
+            "id": row.id,
+            "address": row.address,
+            "malo_number": row.malo_number,
+            "meter_number": row.meter_number,
+            "melo_number": row.melo_number,
+            "has_smart_meter_gateway": row.has_smart_meter_gateway,
+        }
+        for row in session.scalars(select(Property))
+    ]
+    meters = [
+        {
+            "id": row.id,
+            "number": row.number,
+            "melo_number": row.melo_number,
+            "has_smart_meter_gateway": row.has_smart_meter_gateway,
+            "active_to": to_local(row.active_to, ZoneInfo(settings.timezone)),
+            "history_start": to_local(row.history_start, ZoneInfo(settings.timezone)),
+            "history_exhausted": row.history_exhausted,
+            "history_checked_until": to_local(row.history_checked_until, ZoneInfo(settings.timezone)),
+        }
+        for row in session.scalars(select(Meter))
+    ]
+    return {
+        "email": token.viewer_email if token else None,
+        "name": token.viewer_name if token else None,
+        "accounts": accounts,
+        "agreements": agreements,
+        "properties": properties,
+        "meters": meters,
+    }
 
 
 def backfill_overview(session: Session, settings: Settings) -> dict:

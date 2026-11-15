@@ -253,6 +253,43 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     return 1 if report.get("errors") else 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    """Datenbestand als JSON exportieren (für Backups und Umzug)."""
+    from oenergy.services.transfer import write_export
+
+    database = get_database()
+    database.create_all()
+    target = args.out or f"data/backups/o-energy-{datetime.utcnow():%Y%m%d-%H%M%S}.json.gz"
+    with database.session() as session:
+        written = write_export(session, target, compress=not args.no_compress)
+    size_mb = written.stat().st_size / 1024 / 1024
+    print(f"Export geschrieben: {written} ({size_mb:.2f} MB)")
+    return 0
+
+
+def cmd_import(args: argparse.Namespace) -> int:
+    """Export zurückspielen (idempotent - vorhandene Daten werden aktualisiert)."""
+    from oenergy.services.completeness import recompute
+    from oenergy.services.costs import compute_costs
+    from oenergy.services.transfer import import_data, read_export
+
+    database = get_database()
+    database.create_all()
+    payload = read_export(args.file)
+    with database.session() as session:
+        counts = import_data(session, payload)
+
+    settings = get_settings()
+    with database.session() as session:
+        compute_costs(session, settings)
+        recompute(session, settings)
+
+    print(f"Import aus {args.file}:")
+    for name, count in counts.items():
+        print(f"  {name:16} {count}")
+    return 0
+
+
 def cmd_seed(args: argparse.Namespace) -> int:
     from oenergy.services.demo import seed
 
@@ -326,6 +363,15 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--target", default="all", help="all|account|prices|readings")
     probe.add_argument("--out", default=None)
     probe.set_defaults(func=cmd_probe)
+
+    export = sub.add_parser("export", help="export the data as JSON (backup)")
+    export.add_argument("--out", default=None, help="Zieldatei (Standard: data/backups/...)")
+    export.add_argument("--no-compress", action="store_true", help="ohne gzip schreiben")
+    export.set_defaults(func=cmd_export)
+
+    import_cmd = sub.add_parser("import", help="restore a JSON export")
+    import_cmd.add_argument("file", help="Exportdatei (.json oder .json.gz)")
+    import_cmd.set_defaults(func=cmd_import)
 
     seed = sub.add_parser("seed", help="fill the database with demo data")
     seed.add_argument("--days", type=int, default=30)

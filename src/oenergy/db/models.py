@@ -111,6 +111,9 @@ class Meter(Base):
     conversion_factor: Mapped[str | None] = mapped_column(String(40))
     active_from: Mapped[datetime | None] = mapped_column(DateTime)
     active_to: Mapped[datetime | None] = mapped_column(DateTime)
+    history_start: Mapped[datetime | None] = mapped_column(DateTime)
+    history_exhausted: Mapped[bool] = mapped_column(Boolean, default=False)
+    history_checked_until: Mapped[datetime | None] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     readings: Mapped[list[MeterReading]] = relationship(

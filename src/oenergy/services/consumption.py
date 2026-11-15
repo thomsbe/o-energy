@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 from itertools import pairwise
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from oenergy.api import queries
 from oenergy.api.client import KrakenClient
 from oenergy.config import Settings
-from oenergy.db.models import Interval, MeterReading
+from oenergy.db.models import Interval, Meter, MeterReading
 from oenergy.utils import floor_slot, parse_datetime, parse_decimal
 
 REBUILD_WINDOW_DAYS = 120
@@ -150,6 +150,8 @@ def sync_readings(session: Session, client: KrakenClient, settings: Settings) ->
     now = datetime.utcnow()
     stored = 0
     errors: list[str] = []
+    meter_row = session.get(Meter, meter_key)
+    known_start = _known_start(session, meter_key)
 
     for window in plan_queries(session, meter_key, settings, now):
         try:
@@ -213,17 +215,39 @@ def sync_readings(session: Session, client: KrakenClient, settings: Settings) ->
 
         record_query(session, meter_key, window, len(rows))
         logger.info(
-            "Meter %s: window %s -> %s fetched %s intervals",
+            "Meter {}: window {} -> {} fetched {} intervals",
             meter_key,
             window.start,
             window.end,
             len(rows),
         )
 
+        if rows:
+            earliest = min(row["slot_start"] for row in rows)
+            if meter_row is not None and (
+                meter_row.history_start is None or earliest < meter_row.history_start
+            ):
+                meter_row.history_start = earliest
+                meter_row.updated_at = datetime.utcnow()
+                session.commit()
+        elif meter_row is not None and known_start is not None and window.end <= known_start:
+            # vor dem frühesten bekannten Wert gibt es keine Daten mehr
+            if not meter_row.history_exhausted:
+                logger.info("Historie vollständig erfasst - kein Wert vor {}", window.start)
+            meter_row.history_exhausted = True
+            meter_row.history_checked_until = window.start
+            meter_row.updated_at = datetime.utcnow()
+            session.commit()
+
     if not stored and errors:
         raise RuntimeError("Keine Verbrauchsdaten abrufbar: " + "; ".join(errors[:3]))
 
     return stored
+
+
+def _known_start(session: Session, meter_id: str) -> datetime | None:
+    """Der früheste bekannte Verbrauchswert."""
+    return session.scalar(select(func.min(Interval.slot_start)).where(Interval.meter_id == meter_id))
 
 
 def rebuild_intervals(session: Session, settings: Settings) -> int:
@@ -288,5 +312,5 @@ def rebuild_intervals(session: Session, settings: Settings) -> int:
     )
     session.execute(statement)
     session.commit()
-    logger.info("Rebuilt %s consumption slots for meter %s", len(values), meter_id)
+    logger.info("Rebuilt {} consumption slots for meter {}", len(values), meter_id)
     return len(values)

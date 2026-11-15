@@ -34,7 +34,8 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
   `ausstehend` oder `warten` und rechnet nur vollständige Tage als endgültig.
 * **Automatischer Backfill**: Die App merkt sich, welche Zeitfenster bereits
   abgefragt wurden, und fragt nur Lücken nach – inklusive automatischer
-  Nachlieferung der Zählerdaten.
+  Nachlieferung der Zählerdaten. Die Historie wird schrittweise bis zum Ende
+  zurückgeholt; ist das Ende erreicht, wird es gemerkt und nicht weiter gefragt.
 
 ## Schnellstart (lokal)
 
@@ -166,11 +167,25 @@ docker compose logs -f
 * Optionaler Worker ohne Web-Server:
   `docker compose --profile worker up -d oenergy-sync`
 
-### Backup
+### Backup und Wiederherstellung
 
 ```bash
-./scripts/backup.sh            # erzeugt data/backups/o-energy-<zeit>.db
+./scripts/backup.sh            # SQLite-Kopie + JSON-Export nach data/backups/
 ```
+
+Der JSON-Export ist **schemaunabhängig**: er enthält Verbrauch, Preise,
+Tageswerte, Rechnungen und Vertragsdaten als einfache Datensätze und kann
+unabhängig von der Datenbankversion wieder eingespielt werden.
+
+```bash
+uv run oenergy export --out data/backups/sicherung.json.gz   # Export
+uv run oenergy import data/backups/sicherung.json.gz          # Import
+```
+
+Der Import ist **idempotent**: vorhandene Datensätze werden anhand ihrer
+Schlüssel aktualisiert, nichts wird doppelt angelegt. Danach werden Kosten und
+Tagesstatus neu berechnet. Alternativ gibt es den Download direkt aus der
+Oberfläche (Seite *System* → *Export herunterladen*).
 
 ### CLI im Überblick
 
@@ -182,6 +197,8 @@ docker compose logs -f
 | `oenergy sync [job\|all]` | Synchronisation ausführen (`account`, `prices`, `readings`, `finalize`, `bills`) |
 | `oenergy diagnose` | Prüfen, welche Daten der Account liefert |
 | `oenergy probe` | Rohantworten der API dumpen |
+| `oenergy export --out DATEI` | Datenbestand als JSON exportieren |
+| `oenergy import DATEI` | JSON-Export zurückspielen (idempotent) |
 | `oenergy seed --days 30` | Demo-Daten erzeugen |
 | `oenergy reset --yes` | Datenbank leeren |
 | `oenergy init-db` | Schema anlegen |
@@ -217,6 +234,8 @@ uv run oenergy sync prices --history-days 30   # Börsenpreise für die Historie
 | `POLL_INTERVAL_MINUTES` | `15` | Intervall der Preisabfrage |
 | `READINGS_BACKFILL_DAYS` | `3` | Wie weit zurück nachgeladen wird |
 | `READINGS_HISTORY_DAYS` | `30` | Historie beim ersten Abruf |
+| `READINGS_HISTORY_CHUNK_DAYS` | `30` | wie weit ein Lauf die Historie zurückgreift |
+| `READINGS_HISTORY_MAX_DAYS` | `0` | Limit für die Historie (0 = unbegrenzt) |
 | `READINGS_MAX_WINDOW_DAYS` | `7` | Maximale Größe einer Einzelabfrage |
 | `GAP_RETRY_MINUTES` | `60` | Wartezeit, bevor eine leere Lücke erneut geprüft wird |
 | `SLOT_MINUTES` | `15` | Länge eines Verbrauchsintervalls |

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gzip
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -148,6 +150,7 @@ def page_system(request: Request, session: Session = Depends(get_session)) -> HT
             "has_credentials": settings.has_credentials,
             "backfill": dashboard.backfill_overview(session, settings),
             "token": token_status(session),
+            "account_info": dashboard.account_info(session, settings),
             "now": to_local(datetime.utcnow(), _tz()),
         },
     )
@@ -254,6 +257,21 @@ def export_prices(session: Session = Depends(get_session)) -> Response:
         content=body,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=preise.csv"},
+    )
+
+
+@router.get("/api/export/data.json.gz")
+def export_data(session: Session = Depends(get_session)) -> Response:
+    """Datenbestand als JSON-Export (Download)."""
+    from oenergy.services.transfer import export_data as build_export
+
+    payload = json.dumps(build_export(session), default=str).encode("utf-8")
+    compressed = gzip.compress(payload)
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=compressed,
+        media_type="application/gzip",
+        headers={"Content-Disposition": f"attachment; filename=o-energy-export-{stamp}.json.gz"},
     )
 
 
