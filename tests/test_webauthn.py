@@ -95,3 +95,22 @@ def test_challenge_is_read_from_the_session(client, session) -> None:
     response = client.post("/api/auth/passkey/login/options")
     assert response.status_code == 200
     assert "options" in response.json()
+
+
+def test_passkey_login_is_reachable_without_a_session(client, monkeypatch) -> None:
+    """Regressionstest: die Login-Endpunkte dürfen nicht umgeleitet werden."""
+    from oenergy.config import get_settings
+    from oenergy.web.auth import hash_password
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_username", "admin")
+    monkeypatch.setattr(settings, "auth_password_hash", hash_password("geheim123"))
+
+    response = client.post("/api/auth/passkey/login/options", follow_redirects=False)
+    assert response.status_code in (200, 400)
+    assert response.headers["content-type"].startswith("application/json")
+
+    # die Registrierung bleibt geschützt
+    response = client.post("/api/auth/passkey/register/options", follow_redirects=False)
+    assert response.status_code == 401

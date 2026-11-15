@@ -29,6 +29,10 @@ password_hash = PasswordHash.recommended()
 #: Diese Pfade sind ohne Anmeldung erreichbar
 PUBLIC_PATHS = ("/login", "/api/health", "/favicon.ico")
 
+#: Die Passkey-Anmeldung muss ohne Session funktionieren - sonst liefert die
+#: Middleware eine Umleitung auf das Login-Formular statt JSON.
+PUBLIC_PREFIXES = ("/api/auth/passkey/login",)
+
 
 def hash_password(password: str) -> str:
     """Argon2id-Hash für ein Passwort."""
@@ -52,7 +56,9 @@ def auth_enabled(settings: Settings) -> bool:
 def is_public_path(path: str) -> bool:
     if path in PUBLIC_PATHS:
         return True
-    return path.startswith("/static")
+    if path.startswith("/static"):
+        return True
+    return any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
 
 
 class RequireLoginMiddleware:
@@ -80,7 +86,14 @@ class RequireLoginMiddleware:
         target = URL(scope=scope).path
         if scope.get("query_string"):
             target = target + "?" + scope["query_string"].decode()
-        response = RedirectResponse(url=f"/login?next={target}", status_code=303)
+
+        if path.startswith("/api/"):
+            # API-Aufrufe bekommen JSON statt einer Umleitung auf die Login-Seite
+            from fastapi.responses import JSONResponse
+
+            response = JSONResponse({"error": "nicht angemeldet"}, status_code=401)
+        else:
+            response = RedirectResponse(url=f"/login?next={target}", status_code=303)
         await response(scope, receive, send)
 
 
