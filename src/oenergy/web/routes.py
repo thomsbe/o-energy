@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -19,6 +19,13 @@ from oenergy.services import dashboard
 from oenergy.services.identity import token_status
 from oenergy.services.sync import latest_runs, run_job, status_overview
 from oenergy.utils import to_local
+from oenergy.web.auth import (
+    auth_enabled,
+    current_user,
+    login,
+    logout,
+    redirect_to_login,
+)
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = PACKAGE_DIR / "web" / "templates"
@@ -35,6 +42,8 @@ def _localtime(value):
 
 
 templates.env.globals["localtime"] = _localtime
+templates.env.globals["current_user"] = current_user
+templates.env.globals["auth_enabled"] = lambda: auth_enabled(get_settings())
 
 
 def api_response(data: dict | list) -> JSONResponse:
@@ -49,6 +58,42 @@ def _tz():
     from zoneinfo import ZoneInfo
 
     return ZoneInfo(get_settings().timezone)
+
+
+@router.get("/login", response_class=HTMLResponse)
+def page_login(request: Request) -> HTMLResponse:
+    settings = get_settings()
+    if not auth_enabled(settings):
+        return RedirectResponse(url="/", status_code=303)
+    if current_user(request):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "next": request.query_params.get("next", "/"),
+            "error": request.query_params.get("error"),
+            "username": settings.auth_username,
+        },
+    )
+
+
+@router.post("/login")
+async def do_login(request: Request) -> Response:
+    settings = get_settings()
+    form = await request.form()
+    username = str(form.get("username", ""))
+    password = str(form.get("password", ""))
+    target = str(form.get("next", "/") or "/")
+    if login(request, username, password, settings):
+        return redirect_to_login(target)
+    return RedirectResponse(url="/login?error=1", status_code=303)
+
+
+@router.get("/logout")
+def do_logout(request: Request) -> Response:
+    logout(request)
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @router.get("/", response_class=HTMLResponse)

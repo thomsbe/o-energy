@@ -280,6 +280,16 @@ class SyncRun(Base):
     message: Mapped[str | None] = mapped_column(Text)
 
 
+class AppSetting(Base):
+    """Einstellungen der Anwendung, die nicht in der .env stehen."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Token(Base):
     """Cached Kraken access token and long lived refresh token."""
 

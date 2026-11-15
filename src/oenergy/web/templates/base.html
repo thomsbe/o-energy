@@ -34,12 +34,23 @@
       {% if agreement %}
       <span class="chip chip-muted" title="Tarif">{{ agreement.product or 'Tarif unbekannt' }}</span>
       {% endif %}
+      {% if current_user(request) %}
+        <span class="chip chip-muted" title="Angemeldet als {{ current_user(request) }}">{{ current_user(request) }}</span>
+        <a class="btn" href="/logout">Abmelden</a>
+      {% endif %}
       <button class="icon-btn" id="theme-toggle" type="button" title="Hell/Dunkel umschalten">◐</button>
     </div>
   </div>
 </header>
 
 <main class="page">
+  {% if not auth_enabled() %}
+    <div class="warn-banner">
+      ⚠ <strong>Keine Anmeldung aktiv</strong> – jeder mit Zugriff auf diese Adresse kann die Daten
+      sehen. Für einen Betrieb im Internet: <code>uv run oenergy set-password</code> und den
+      Hash in die <code>.env</code> eintragen.
+    </div>
+  {% endif %}
   {% block content %}{% endblock %}
 </main>
 

@@ -274,6 +274,32 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     return 1 if report.get("errors") else 0
 
 
+def cmd_set_password(args: argparse.Namespace) -> int:
+    """Erzeugt den Passwort-Hash für die Anmeldung."""
+    from getpass import getpass
+
+    from oenergy.web.auth import hash_password
+
+    password = args.password
+    if not password:
+        password = getpass("Passwort: ")
+        if password != getpass("Passwort wiederholen: "):
+            print("Die Passwörter stimmen nicht überein.", file=sys.stderr)
+            return 2
+    if len(password) < 8:
+        print("Das Passwort sollte mindestens 8 Zeichen lang sein.", file=sys.stderr)
+        return 2
+
+    print()
+    print("Diese Zeile in die .env übernehmen:")
+    print()
+    print(f"AUTH_PASSWORD_HASH={hash_password(password)}")
+    print()
+    print("Zusätzlich sinnvoll (für HTTPS):")
+    print("COOKIE_SECURE=true")
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """Datenbestand als JSON exportieren (für Backups und Umzug)."""
     from oenergy.services.transfer import write_export
@@ -384,6 +410,10 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--target", default="all", help="all|account|prices|readings")
     probe.add_argument("--out", default=None)
     probe.set_defaults(func=cmd_probe)
+
+    set_password = sub.add_parser("set-password", help="create the password hash for the login")
+    set_password.add_argument("password", nargs="?", default=None, help="Passwort (ohne Angabe: interaktiv)")
+    set_password.set_defaults(func=cmd_set_password)
 
     export = sub.add_parser("export", help="export the data as JSON (backup)")
     export.add_argument("--out", default=None, help="Zieldatei (Standard: data/backups/...)")

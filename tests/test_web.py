@@ -117,3 +117,59 @@ def test_access_tile_reflects_the_token_state(client, session) -> None:
 
     response = client.get("/system")
     assert "erneut anmelden" in response.text
+
+
+def test_login_flow_with_password(client, monkeypatch) -> None:
+    from oenergy.config import get_settings
+    from oenergy.web.auth import hash_password
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_username", "admin")
+    monkeypatch.setattr(settings, "auth_password_hash", hash_password("geheim123"))
+
+    # ohne Anmeldung wird auf die Login-Seite umgeleitet
+    response = client.get("/kosten", follow_redirects=False)
+    assert response.status_code == 303
+    assert "/login" in response.headers["location"]
+
+    # die Login-Seite ist erreichbar
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert "Anmeldung" in response.text
+
+    # falsches Passwort
+    response = client.post("/login", data={"username": "admin", "password": "falsch"}, follow_redirects=False)
+    assert response.status_code == 303
+    assert "error=1" in response.headers["location"]
+
+    # richtiges Passwort
+    response = client.post(
+        "/login", data={"username": "admin", "password": "geheim123"}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+    # jetzt sind die Seiten erreichbar
+    response = client.get("/kosten", follow_redirects=False)
+    assert response.status_code == 200
+
+    # Abmelden
+    response = client.get("/logout", follow_redirects=False)
+    assert response.status_code == 303
+    response = client.get("/kosten", follow_redirects=False)
+    assert response.status_code == 303
+    assert "/login" in response.headers["location"]
+
+
+def test_public_paths_stay_reachable(client, monkeypatch) -> None:
+    from oenergy.config import get_settings
+    from oenergy.web.auth import hash_password
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_username", "admin")
+    monkeypatch.setattr(settings, "auth_password_hash", hash_password("geheim123"))
+
+    assert client.get("/api/health").status_code == 200
+    assert client.get("/static/css/app.css").status_code == 200

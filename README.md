@@ -204,6 +204,50 @@ Oberfläche (Seite *System* → *Export herunterladen*).
 | `oenergy init-db` | Schema anlegen |
 | `oenergy jobs` | Job-Zeitplan anzeigen |
 
+## Anmeldung
+
+Die App ist **ohne Anmeldung** nutzbar – für den Betrieb auf einem offenen
+Server sollte sie aber geschützt werden. Es genügt ein Benutzer:
+
+```bash
+uv run oenergy set-password            # fragt das Passwort ab und gibt den Hash aus
+```
+
+Den ausgegebenen Hash in die `.env` eintragen:
+
+```bash
+AUTH_ENABLED=true
+AUTH_USERNAME=admin
+AUTH_PASSWORD_HASH=$argon2id$v=19$m=65536,t=3,p=4$...
+```
+
+Danach ist die App nur mit Anmeldung erreichbar (`/login`); die Sitzung liegt in
+einem signierten Cookie (`oenergy_session`, 14 Tage). Das Secret zum Signieren
+wird beim ersten Start erzeugt und in der Datenbank abgelegt – es bleibt also
+über Container-Neustarts hinweg gültig.
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `AUTH_ENABLED` | `true` | Anmeldung aktiv (wirkt nur, wenn ein Hash gesetzt ist) |
+| `AUTH_USERNAME` | `admin` | Benutzername |
+| `AUTH_PASSWORD_HASH` | – | Argon2id-Hash (siehe `oenergy set-password`) |
+| `AUTH_SECRET` | – | optional: eigenes Secret für die Sitzungs-Cookies |
+| `SESSION_MAX_AGE_DAYS` | `14` | Gültigkeit der Sitzung |
+| `COOKIE_SECURE` | `false` | auf `true` setzen, wenn die App nur über HTTPS erreichbar ist |
+
+Solange kein Hash gesetzt ist, bleibt die App offen und weist in der Kopfzeile
+mit einem gelben Hinweis darauf hin. **Für einen Betrieb im Internet
+(Cloudflare Tunnel, Portfreigabe) muss ein Passwort gesetzt sein** – sonst sind
+Verbrauchsdaten, Konto- und Zählernummer sowie die Adresse für jeden erreichbar,
+der die URL kennt.
+
+### Passkeys (optional)
+
+Für eine Anmeldung ohne Passwort gibt es mit `py_webauthn` (WebAuthn/FIDO2) eine
+reine Python-Lösung: Registrierung und Anmeldung laufen als Browser-Zeremonien
+gegen den eigenen Server. Das lässt sich als zweite Methode neben dem Passwort
+ergänzen.
+
 ## Jobs
 
 | Job | Rhythmus | Aufgabe |

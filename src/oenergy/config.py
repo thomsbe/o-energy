@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     db_url: str = "sqlite:///./data/o-energy.db"
     timezone: str = "Europe/Berlin"
 
+    # --- Anmeldung --------------------------------------------------------
+    auth_enabled: bool = True
+    auth_username: str = "admin"
+    auth_password_hash: str | None = None
+    auth_secret: str | None = None
+    session_max_age_days: int = 14
+    cookie_secure: bool = False  # auf True setzen, wenn die App nur über HTTPS erreichbar ist
+
     # --- Logging ----------------------------------------------------------
     log_level: str = "INFO"
     log_file: str | None = None

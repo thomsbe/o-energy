@@ -7,7 +7,13 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-Nichts vorbereitet.
+### Hinzugefügt
+
+- **Anmeldung mit Benutzername und Passwort** (Argon2id über `pwdlib`, Sitzung in
+  einem signierten Cookie). Ein Benutzer genügt: `oenergy set-password` erzeugt
+  den Hash für die `.env`. Ohne gesetzten Hash bleibt die App offen und weist
+  mit einem Hinweis in der Kopfzeile darauf hin – für den Betrieb im Internet
+  sollte ein Passwort gesetzt sein.
 
 ## [1.0.0] – 2026-11-15
 
