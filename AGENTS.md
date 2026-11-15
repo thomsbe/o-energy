@@ -49,8 +49,12 @@ uv run oenergy serve         # Web-App auf http://127.0.0.1:8000
    ~24 Stunden Verzögerung. „Heute“ darf in **keiner** Kachel und **keinem**
    Diagramm auftauchen (Ausnahmen: reine Preise, die gültig sind).
 6. **Keine Geheimnisse ins Repository.** `.env`, `data/` und `probe.json` sind
-   ignoriert. Zugangsdaten ausschließlich in `.env`.
-7. **Jede Verhaltensänderung braucht einen Test** in `tests/`.
+   ignoriert. Zugangsdaten ausschließlich in `.env`. **Achtung:** Docker Compose
+   interpoliert die `.env` – ein Argon2-Hash muss dort als `$$argon2id$$…`
+   escaped werden, sonst kommt er zerstört im Container an.
+7. **Jede Verhaltensänderung braucht einen Test** in `tests/`. Die Tests dürfen
+   nicht von der lokalen `.env` abhängen (in `tests/conftest.py` werden die
+   relevanten Variablen explizit gesetzt).
 8. **`CHANGELOG.md` pflegen** (Keep a Changelog), Versionen nach SemVer.
 
 ---

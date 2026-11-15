@@ -215,6 +215,16 @@ uv run oenergy set-password            # fragt das Passwort ab und gibt den Hash
 
 Den ausgegebenen Hash in die `.env` eintragen:
 
+> **Wichtig beim Docker Compose:** Die `.env` wird von Compose interpoliert – ein
+> Argon2-Hash enthält `$`-Zeichen und muss dort als `$$` escaped werden, sonst
+> kommt er im Container zerstört an und die Anmeldung schlägt immer fehl:
+>
+> ```bash
+> # in der .env
+> AUTH_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$…$$…
+> ```
+
+
 ```bash
 AUTH_ENABLED=true
 AUTH_USERNAME=admin
