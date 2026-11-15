@@ -55,10 +55,26 @@
 
 <section class="panel">
   <header class="panel-head">
-    <h2>Verbrauchsprofil</h2>
-    <span class="panel-sub">15-Minunden-Slots der letzten 3 Tage</span>
+    <h2>Verbrauch und Preis</h2>
+    <span class="panel-sub">15-Minuten-Slots der letzten 2 Tage – die Preislinie zeigt, zu welchem Preis verbraucht wurde</span>
   </header>
-  <div class="chart-wrap chart-lg"><canvas id="chart-consumption"></canvas></div>
+  <div class="chart-wrap chart-lg"><canvas id="chart-consumption-price"></canvas></div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Verbrauch im Monat</h2>
+    <span class="panel-sub">Tagesverbrauch {{ month_label }}</span>
+    <div class="panel-actions">
+      <a class="btn" href="/verbrauch?month={{ prev_month }}" title="Vorheriger Monat">‹ {{ prev_month }}</a>
+      <a class="btn" href="/verbrauch?month={{ month_param }}" title="Aktueller Monat">heute</a>
+      <a class="btn" href="/verbrauch?month={{ next_month }}" title="Nächster Monat">{{ next_month }} ›</a>
+    </div>
+  </header>
+  <div class="chart-wrap chart-lg"><canvas id="chart-monthly" data-month="{{ month_param }}"></canvas></div>
+  <p class="panel-sub" style="margin-top:8px">
+    Hell = endgültige Werte · dunkel = noch provisorisch (Zählerdaten mit ~24 h Verzögerung)
+  </p>
 </section>
 
 <section class="panel">

@@ -46,3 +46,30 @@ def test_dashboard_shows_a_hint_without_data(client) -> None:
     assert response.status_code == 200
     assert "Noch keine Daten" in response.text
     assert "oenergy sync all" in response.text
+
+
+def test_consumption_page_supports_month_navigation(client, seeded) -> None:
+    response = client.get("/verbrauch?month=2026-10")
+    assert response.status_code == 200
+    assert "10/2026" in response.text
+    assert "chart-monthly" in response.text
+    assert "chart-consumption-price" in response.text
+
+    # Vormonat und Folgemonat werden verlinkt
+    assert "month=2026-09" in response.text
+    assert "month=2026-11" in response.text
+
+
+def test_monthly_chart_endpoint(client, seeded) -> None:
+    response = client.get("/api/chart/monthly?month=2026-10")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["month"] == "2026-10"
+    assert len(data["days"]) == 31
+
+
+def test_consumption_price_endpoint(client, seeded) -> None:
+    response = client.get("/api/chart/consumption-price")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["labels"]) == len(data["kwh"]) == len(data["price"])

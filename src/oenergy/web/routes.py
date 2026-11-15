@@ -57,9 +57,30 @@ def page_dashboard(request: Request, session: Session = Depends(get_session)) ->
     )
 
 
+def _parse_month(value: str | None) -> tuple[int, int]:
+    """Monat aus der Query-Parameter-Angabe (YYYY-MM), sonst der aktuelle Monat."""
+    now = to_local(datetime.utcnow(), _tz())
+    if value:
+        try:
+            year, month = (int(part) for part in value.split("-")[:2])
+            if 1 <= month <= 12:
+                return year, month
+        except (TypeError, ValueError):
+            pass
+    return now.year, now.month
+
+
+def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    index = year * 12 + (month - 1) + delta
+    return index // 12, index % 12 + 1
+
+
 @router.get("/verbrauch", response_class=HTMLResponse)
 def page_consumption(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
     settings = get_settings()
+    year, month = _parse_month(request.query_params.get("month"))
+    previous = _shift_month(year, month, -1)
+    following = _shift_month(year, month, 1)
     return templates.TemplateResponse(
         request,
         "consumption.html",
@@ -69,6 +90,12 @@ def page_consumption(request: Request, session: Session = Depends(get_session)) 
             "consumption": dashboard.consumption_summary(session, settings),
             "readings": dashboard.meter_readings(session, 60),
             "prices": dashboard.price_overview(session, settings),
+            "consumption_price": dashboard.consumption_with_price(session, settings, days=2),
+            "month_days": dashboard.daily_consumption(session, settings, year, month),
+            "month_label": f"{month:02d}/{year}",
+            "prev_month": f"{previous[0]:04d}-{previous[1]:02d}",
+            "next_month": f"{following[0]:04d}-{following[1]:02d}",
+            "month_param": f"{year:04d}-{month:02d}",
             "now": to_local(datetime.utcnow(), _tz()),
         },
     )
@@ -179,6 +206,22 @@ def chart_prices(session: Session = Depends(get_session)) -> JSONResponse:
 @router.get("/api/chart/consumption")
 def chart_consumption(session: Session = Depends(get_session)) -> JSONResponse:
     return api_response(dashboard.consumption_chart_data(session, get_settings()))
+
+
+@router.get("/api/chart/consumption-price")
+def chart_consumption_price(session: Session = Depends(get_session)) -> JSONResponse:
+    return api_response(dashboard.consumption_with_price(session, get_settings(), days=2))
+
+
+@router.get("/api/chart/monthly")
+def chart_monthly(request: Request, session: Session = Depends(get_session)) -> JSONResponse:
+    year, month = _parse_month(request.query_params.get("month"))
+    return api_response(
+        {
+            "days": dashboard.daily_consumption(session, get_settings(), year, month),
+            "month": f"{year:04d}-{month:02d}",
+        }
+    )
 
 
 @router.get("/api/chart/costs")

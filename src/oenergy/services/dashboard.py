@@ -12,7 +12,7 @@ from oenergy.db.models import Agreement, DailyStat, Interval, MeterReading, Pric
 from oenergy.services.account import active_meter_id
 from oenergy.services.completeness import data_state, expected_delivery_at
 from oenergy.services.pricing import PriceBook, compose_at, group_rates
-from oenergy.utils import local_day, to_local
+from oenergy.utils import floor_slot, local_day, to_local
 
 
 def _fmt_price(ct_per_kwh: float | None) -> str:
@@ -268,6 +268,74 @@ def consumption_chart_data(session: Session, settings: Settings, days: int = 3) 
         )
 
     return {"days": days_meta, "series": series}
+
+
+def consumption_with_price(session: Session, settings: Settings, days: int = 2) -> dict:
+    """Verbrauch und Preis je 15-Minuten-Slot.
+
+    So wird sichtbar, zu welchem Preis verbraucht wurde.
+    """
+    tz = ZoneInfo(settings.timezone)
+    now = datetime.utcnow()
+    start = now - timedelta(days=days)
+    meter_id = active_meter_id(session, settings)
+
+    interval_query = select(Interval).where(Interval.slot_start >= start).order_by(Interval.slot_start)
+    if meter_id is not None:
+        interval_query = interval_query.where(Interval.meter_id == meter_id)
+    consumption = {row.slot_start: row.kwh for row in session.scalars(interval_query)}
+
+    book = PriceBook(
+        session,
+        start,
+        now + timedelta(hours=1),
+        vat=float(_vat_rate(session)),
+        tz=tz,
+    )
+
+    labels: list[str] = []
+    kwh: list[float | None] = []
+    prices: list[float | None] = []
+    cursor = floor_slot(start, settings.slot_minutes)
+    while cursor <= now:
+        price = book.at(cursor)
+        labels.append(to_local(cursor, tz).isoformat())
+        kwh.append(consumption.get(cursor))
+        prices.append(price.gross_ct_per_kwh if price else None)
+        cursor += timedelta(minutes=settings.slot_minutes)
+
+    return {"labels": labels, "kwh": kwh, "price": prices}
+
+
+def daily_consumption(session: Session, settings: Settings, year: int, month: int) -> list[dict]:
+    """Tagesverbrauch eines Monats (für die Monatsansicht)."""
+    meter_id = active_meter_id(session, settings)
+    first = date(year, month, 1)
+    last = date(year + (month == 12), (month % 12) + 1, 1)
+    days_in_month = (last - first).days
+
+    query = select(DailyStat).where(DailyStat.day >= first, DailyStat.day < last)
+    if meter_id is not None:
+        query = query.where(DailyStat.meter_id == meter_id)
+    stats = {stat.day: stat for stat in session.scalars(query)}
+
+    now = datetime.utcnow()
+    result: list[dict] = []
+    for offset in range(days_in_month):
+        day = first + timedelta(days=offset)
+        stat = stats.get(day)
+        has_data = bool(stat and stat.received_slots)
+        result.append(
+            {
+                "day": day.isoformat(),
+                "label": day.strftime("%d.%m."),
+                "kwh": stat.kwh if has_data else None,
+                "cost_cents": stat.cost_cents if has_data else 0.0,
+                "is_final": bool(stat.is_final) if stat else False,
+                "state": data_state(day, stat, now, settings),
+            }
+        )
+    return result
 
 
 def cost_chart_data(session: Session, settings: Settings, days: int = 30) -> dict:

@@ -128,6 +128,8 @@
     });
     renderPrices();
     renderConsumption();
+    renderConsumptionPrice();
+    renderMonthly();
     renderCosts();
   }
 
@@ -334,17 +336,161 @@
     });
   }
 
+
+  // ------------------------------------------------ Verbrauch und Preis
+  async function renderConsumptionPrice() {
+    const data = await getJSON("/api/chart/consumption-price");
+    if (!data || !data.labels || !data.labels.length) return;
+
+    const labels = data.labels.map(clock);
+    upsert("chart-consumption-price", {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Verbrauch (kWh)",
+            data: data.kwh,
+            type: "bar",
+            yAxisID: "y",
+            backgroundColor: cssVar("--info", "#58a6ff") + "66",
+            borderColor: cssVar("--info", "#58a6ff"),
+            borderWidth: 0,
+            borderRadius: 2,
+            spanGaps: true,
+          },
+          {
+            label: "Preis (ct/kWh)",
+            data: data.price,
+            type: "line",
+            yAxisID: "y1",
+            borderColor: cssVar("--warn", "#d29922"),
+            backgroundColor: cssVar("--warn", "#d29922") + "22",
+            borderWidth: 1.8,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.3,
+            fill: true,
+            spanGaps: true,
+          },
+        ],
+      },
+      options: baseOptions({
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor(), usePointStyle: true } },
+          tooltip: {
+            backgroundColor: "#10151c",
+            borderColor: gridColor(),
+            borderWidth: 1,
+            callbacks: {
+              title: function (items) {
+                return fullLabel(data.labels[items[0].dataIndex]);
+              },
+              label: function (item) {
+                if (item.parsed.y === null) return item.dataset.label + ": –";
+                return (
+                  item.dataset.label +
+                  ": " +
+                  (item.datasetIndex === 0 ? item.parsed.y.toFixed(3) : item.parsed.y.toFixed(2))
+                );
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 30 },
+          },
+          y: {
+            position: "left",
+            grid: { color: gridColor(), drawTicks: false },
+            ticks: { color: textColor(), callback: function (value) { return value + " kWh"; } },
+          },
+          y1: {
+            position: "right",
+            grid: { drawOnChartArea: false },
+            ticks: { color: cssVar("--warn", "#d29922"), callback: function (value) { return value + " ct"; } },
+          },
+        },
+      }),
+    });
+  }
+
+  // ------------------------------------------------------ Monatsverbrauch
+  async function renderMonthly(month) {
+    const canvas = document.getElementById("chart-monthly");
+    const selected = month || (canvas && canvas.dataset.month) || "";
+    const query = selected ? "?month=" + encodeURIComponent(selected) : "";
+    const data = await getJSON("/api/chart/monthly" + query);
+    if (!data || !data.days || !data.days.length) return;
+
+    const finalColor = cssVar("--info", "#58a6ff");
+    const provisionalColor = cssVar("--warn", "#d29922");
+    upsert("chart-monthly", {
+      type: "bar",
+      data: {
+        labels: data.days.map(function (day) { return day.label; }),
+        datasets: [
+          {
+            label: "Verbrauch (kWh)",
+            data: data.days.map(function (day) { return day.kwh; }),
+            backgroundColor: data.days.map(function (day) {
+              return day.is_final ? finalColor : provisionalColor;
+            }),
+            borderRadius: 3,
+          },
+        ],
+      },
+      options: baseOptions({
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#10151c",
+            borderColor: gridColor(),
+            borderWidth: 1,
+            callbacks: {
+              title: function (items) {
+                const day = data.days[items[0].dataIndex];
+                return day.day + (day.is_final ? " (endgültig)" : " (provisorisch)");
+              },
+              label: function (item) {
+                const day = data.days[item.dataIndex];
+                if (item.parsed.y === null) return "keine Zählerdaten";
+                return (
+                  item.parsed.y.toFixed(3) + " kWh · " + (day.cost_cents / 100).toFixed(2) + " €"
+                );
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 12 } },
+          y: {
+            grid: { color: gridColor(), drawTicks: false },
+            ticks: { color: textColor(), callback: function (value) { return value + " kWh"; } },
+          },
+        },
+      }),
+    });
+  }
+
   // ------------------------------------------------------------------ init
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
     renderPrices();
     renderConsumption();
+    renderConsumptionPrice();
+    renderMonthly();
     renderCosts();
 
     // keep the charts fresh
     setInterval(function () {
       renderPrices();
       renderConsumption();
+      renderConsumptionPrice();
+      renderMonthly();
       renderCosts();
     }, 60000);
 

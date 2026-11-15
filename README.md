@@ -23,7 +23,10 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
   (z. B. Basiskomponente + dynamische Komponente) – die App summiert sie zum
   tatsächlichen Kundenpreis und zeigt die Bestandteile an.
 * **Verbrauch**: 15-Minuten-Intervalle, Tages-/Monatswerte, Zählerstände (roh),
-  Zählerregister.
+  Zählerregister. Im Diagramm „Verbrauch und Preis“ liegt die Preislinie über dem
+  Verbrauchsprofil der letzten zwei Tage – so sieht man, zu welchem Preis
+  verbraucht wurde. Darunter lässt sich der Tagesverbrauch Monat für Monat
+  durchblättern.
 * **Kosten**: Energiekosten (Verbrauch × Zeitpreis) + Grundpreis, Tages-/Monats-
   /Jahreswerte, Monatsprognose, Abgleich mit den Rechnungen aus dem Kundenkonto.
 * **24-h-Latenz**: Die Werte des Zähleranbieters kommen erst am Folgetag gegen

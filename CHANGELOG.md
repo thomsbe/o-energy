@@ -94,6 +94,15 @@ HTMX-Web-Oberfläche.
 - Die entwertete Abfrage `supplyPoint.readings` wurde entfernt (die Verbrauchsdaten
   kommen aus `property.measurements`).
 
+### Erweitert (Review-Runde 2)
+
+- Seite „Verbrauch“: neues Diagramm „Verbrauch und Preis“ – die 15-Minuten-Slots
+  der letzten zwei Tage als Balken mit zusätzlicher Preislinie (zweite Achse), so
+  wird sichtbar, zu welchem Preis verbraucht wurde.
+- Seite „Verbrauch“: darunter der Monatsverbrauch als Balkendiagramm mit
+  Vor-/Zurück-Navigation über die Monate (endgültige Tage hell, provisorische
+  dunkel). Tage ohne Zählerdaten werden als Lücke dargestellt, nicht als 0 kWh.
+
 ### Lizenz
 
 - Das Projekt steht unter der **MIT-Lizenz** (`LICENSE`, `project.license = "MIT"`).
