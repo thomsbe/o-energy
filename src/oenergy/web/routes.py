@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from oenergy.config import get_settings
@@ -15,10 +15,8 @@ from oenergy.db.base import get_database, get_session
 from oenergy.db.models import Bill
 from oenergy.services import dashboard
 from oenergy.services.identity import token_status
-from oenergy.services.sync import latest_runs, run_job
+from oenergy.services.sync import latest_runs, run_job, status_overview
 from oenergy.utils import to_local
-
-logger = logging.getLogger(__name__)
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = PACKAGE_DIR / "web" / "templates"
@@ -136,6 +134,7 @@ def page_system(request: Request, session: Session = Depends(get_session)) -> HT
 @router.get("/partials/tiles", response_class=HTMLResponse)
 def partial_tiles(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
     settings = get_settings()
+    status = status_overview(session)
     return templates.TemplateResponse(
         request,
         "partials/tiles.html",
@@ -143,7 +142,8 @@ def partial_tiles(request: Request, session: Session = Depends(get_session)) -> 
             "prices": dashboard.price_overview(session, settings),
             "consumption": dashboard.consumption_summary(session, settings),
             "costs": dashboard.cost_summary(session, settings),
-            "runs": latest_runs(session, 1),
+            "last_success": status["last_success"],
+            "job_status": status["jobs_list"],
             "now": to_local(datetime.utcnow(), _tz()),
         },
     )
@@ -157,7 +157,7 @@ def partial_sync_status(request: Request, session: Session = Depends(get_session
 
 @router.post("/actions/sync", response_class=HTMLResponse)
 def action_sync(request: Request, job: str = "readings") -> HTMLResponse:
-    logger.info("Manual sync requested for job %s", job)
+    logger.info("Manual sync requested for job {}", job)
     run = run_job(job)
     return templates.TemplateResponse(
         request,

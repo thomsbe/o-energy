@@ -62,6 +62,12 @@
     </header>
     <div class="heatmap">
       {% if heatmap.matrix %}
+      <div class="heatmap-legend">
+        <span><i class="heatmap-swatch is-cheap"></i> günstig</span>
+        <span><i class="heatmap-swatch is-mid"></i> mittel</span>
+        <span><i class="heatmap-swatch is-expensive"></i> teuer</span>
+        <span class="muted">Schwellen brutto: unter {{ heatmap.cheap_limit|default(26) }} ct/kWh günstig, ab {{ heatmap.expensive_limit|default(40) }} ct/kWh teuer</span>
+      </div>
         <div class="heatmap-hours">
           {% for hour in range(0, 24) %}
             <span>{{ "%02d"|format(hour) }}</span>
@@ -72,9 +78,12 @@
             <span class="heatmap-label">{{ heatmap.labels[loop.index0][5:] }}</span>
             <div class="heatmap-cells">
               {% for cell in row %}
-                <span class="heatmap-cell {% if cell is none %}is-empty{% endif %}"
-                      {% if cell is not none %}style="--v: {{ (cell / 45) if cell else 0 }}"{% endif %}
-                      title="{% if cell is not none %}{{ "%.2f"|format(cell) }} ct/kWh{% else %}keine Daten{% endif %}"></span>
+                {% if cell %}
+                  <span class="heatmap-cell {{ cell.class }}" style="--l: {{ cell.level }}"
+                        title="{{ "%.2f"|format(cell.value) }} ct/kWh · {{ cell.label }}{% if cell.variable is not none %} · davon {{ "%.2f"|format(cell.variable) }} ct Börsenpreis{% endif %}"></span>
+                {% else %}
+                  <span class="heatmap-cell is-empty" title="keine Daten"></span>
+                {% endif %}
               {% endfor %}
             </div>
           </div>

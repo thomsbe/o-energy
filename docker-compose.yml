@@ -9,6 +9,7 @@ services:
     environment:
       DB_URL: sqlite:////data/o-energy.db
       SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-true}"
+      LOG_FILE: "${LOG_FILE:-/data/logs/o-energy.log}"
       TZ: Europe/Berlin
     volumes:
       - ./data:/data

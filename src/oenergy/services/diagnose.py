@@ -7,7 +7,6 @@ and consumption queries work for a real contract.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -21,8 +20,6 @@ from oenergy.db.models import Agreement, DailyStat, Interval, Meter, Price, Prop
 from oenergy.services.account import primary_agreement, sync_account
 from oenergy.services.completeness import data_state
 from oenergy.utils import to_local
-
-logger = logging.getLogger(__name__)
 
 
 def _fmt(value: Any, digits: int = 2) -> str:

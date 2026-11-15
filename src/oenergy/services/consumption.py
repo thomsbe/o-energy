@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import pairwise
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -15,8 +15,6 @@ from oenergy.api.client import KrakenClient
 from oenergy.config import Settings
 from oenergy.db.models import Interval, MeterReading
 from oenergy.utils import floor_slot, parse_datetime, parse_decimal
-
-logger = logging.getLogger(__name__)
 
 REBUILD_WINDOW_DAYS = 120
 
@@ -226,94 +224,6 @@ def sync_readings(session: Session, client: KrakenClient, settings: Settings) ->
         raise RuntimeError("Keine Verbrauchsdaten abrufbar: " + "; ".join(errors[:3]))
 
     return stored
-
-
-def sync_supply_point_intervals(
-    session: Session,
-    client: KrakenClient,
-    settings: Settings,
-    meter_id: str | None = None,
-) -> int:
-    """Fetch the interval values of the supply point (real 15 minute values).
-
-    The meter readings are cumulative register values; the supply point can
-    deliver the actual interval consumption.  When available, these values are
-    used directly for the charts.
-    """
-    from oenergy.services.account import primary_agreement
-
-    agreement = primary_agreement(session, settings)
-    if agreement is None or not agreement.supply_point_external_id:
-        return 0
-    if meter_id is None:
-        from oenergy.services.account import primary_meter
-
-        meter = primary_meter(session, settings)
-        meter_id = meter.id if meter else None
-    if meter_id is None:
-        return 0
-    market = agreement.supply_point_market or "Default-DE"
-
-    now = datetime.utcnow()
-    start = now - timedelta(days=settings.readings_backfill_days)
-    granularity = {15: "FIFTEEN_MIN", 30: "THIRTY_MIN", 60: "HOUR"}.get(settings.slot_minutes, "FIFTEEN_MIN")
-
-    try:
-        nodes = client.paginate(
-            queries.SUPPLY_POINT_READINGS,
-            {
-                "externalIdentifier": agreement.supply_point_external_id,
-                "marketName": market,
-                "startAt": start.isoformat() + "Z",
-                "endAt": now.isoformat() + "Z",
-                "readingType": "INTERVAL",
-                "timeGranularity": granularity,
-                "timezone": settings.timezone,
-            },
-            edges_path=("supplyPoint", "readings", "importReadings"),
-        )
-    except Exception as exc:
-        logger.info("Supply point readings not available: %s", exc)
-        return 0
-
-    rows = []
-    for node in nodes:
-        slot_start = parse_datetime(node.get("intervalStart"))
-        value = parse_decimal(node.get("value"))
-        if slot_start is None or value is None:
-            continue
-        slot_end = parse_datetime(node.get("intervalEnd")) or (
-            slot_start + timedelta(minutes=settings.slot_minutes)
-        )
-        rows.append(
-            {
-                "meter_id": meter_id,
-                "slot_start": floor_slot(slot_start, settings.slot_minutes),
-                "slot_end": slot_end,
-                "kwh": value,
-                "source": "measured",
-                "n_readings": 1,
-                "received_at": datetime.utcnow(),
-            }
-        )
-
-    if not rows:
-        return 0
-
-    statement = sqlite_insert(Interval).values(rows)
-    statement = statement.on_conflict_do_update(
-        index_elements=["meter_id", "slot_start"],
-        set_={
-            "slot_end": statement.excluded.slot_end,
-            "kwh": statement.excluded.kwh,
-            "n_readings": statement.excluded.n_readings,
-            "source": statement.excluded.source,
-        },
-    )
-    session.execute(statement)
-    session.commit()
-    logger.info("Stored %s interval readings from the supply point", len(rows))
-    return len(rows)
 
 
 def rebuild_intervals(session: Session, settings: Settings) -> int:

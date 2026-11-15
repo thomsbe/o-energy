@@ -2,21 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from oenergy.config import get_settings
 from oenergy.db.base import get_database
+from oenergy.logging_config import setup_logging
 from oenergy.services.identity import format_identity
 
 
 def _configure_logging(verbose: bool) -> None:
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
+    settings = get_settings()
+    setup_logging(
+        level="DEBUG" if verbose else settings.log_level,
+        log_file=settings.log_file,
+        rotation=settings.log_rotation,
+        retention=settings.log_retention,
     )
 
 
@@ -35,10 +37,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
+    from oenergy.api.client import KrakenClient
     from oenergy.services.sync import JOBS, run_all, run_job
 
     database = get_database()
     database.create_all()
+    settings = get_settings()
 
     if args.job and args.job != "all":
         if args.job not in JOBS:
@@ -48,6 +52,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
         runs = [run]
     else:
         runs = run_all(database=database)
+
+    if args.history_days:
+        from oenergy.services.prices import sync_prices
+
+        with database.session() as session, KrakenClient(settings, database.session) as client:
+            count = sync_prices(session, client, settings, history_days=args.history_days)
+        print(f"Historische Preise nachgeladen: {count}")
 
     for run in runs:
         state = "OK " if run.status == "ok" else "ERR"
@@ -303,6 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sync = sub.add_parser("sync", help="run the API synchronisation")
     sync.add_argument("job", nargs="?", default="all", help="account|prices|readings|finalize|bills|all")
+    sync.add_argument(
+        "--history-days",
+        type=int,
+        default=0,
+        help="Börsenpreise für die Historie nachladen (z.B. 30)",
+    )
     sync.set_defaults(func=cmd_sync)
 
     probe = sub.add_parser("probe", help="dump the raw API answers")

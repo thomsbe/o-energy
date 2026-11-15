@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,8 +13,6 @@ from oenergy.api.errors import KrakenError
 from oenergy.config import Settings
 from oenergy.db.models import Account, Agreement, Meter, Property, Token
 from oenergy.utils import parse_datetime
-
-logger = logging.getLogger(__name__)
 
 ELECTRICITY_HINTS = ("electric", "strom", "power")
 TIME_OF_USE_HINTS = ("dynamic", "tou", "zeitzone")
@@ -44,7 +42,7 @@ def sync_account(session: Session, client: KrakenClient, settings: Settings) -> 
         break
 
     if account_row is None and wanted:
-        logger.warning("Configured account %s was not found in the Kraken account list", wanted)
+        logger.warning("Configured account {} was not found in the Kraken account list", wanted)
         return None
     if account_row is None:
         account_row = _upsert_account(session, accounts[0])
@@ -194,7 +192,7 @@ def sync_meters(
         )
     except KrakenError as exc:
         # not available for customer accounts - the meter comes with the property
-        logger.info("electricityMeters not available: %s", exc.message)
+        logger.info("electricityMeters not available: {}", exc.message)
         return []
     connection = (payload.get("data") or {}).get("electricityMeters") or {}
     rows: list[Meter] = []

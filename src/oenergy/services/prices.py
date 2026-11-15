@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from oenergy.api import queries
@@ -12,8 +12,6 @@ from oenergy.config import Settings
 from oenergy.db.models import Agreement, Price
 from oenergy.services.pricing import RateWindow, effective_at, group_rates
 from oenergy.utils import parse_datetime, parse_decimal
-
-logger = logging.getLogger(__name__)
 
 FAR_PAST = datetime(2000, 1, 1)
 FAR_FUTURE = datetime(2100, 1, 1)
@@ -88,8 +86,19 @@ def _store_price(
     row.updated_at = datetime.utcnow()
 
 
-def sync_prices(session: Session, client: KrakenClient, settings: Settings) -> int:
-    """Fetch customer prices (and EPEX spot prices) and persist them."""
+def sync_prices(
+    session: Session,
+    client: KrakenClient,
+    settings: Settings,
+    *,
+    history_days: int = 0,
+) -> int:
+    """Fetch customer prices (and EPEX spot prices) and persist them.
+
+    ``history_days`` holt die Börsenpreise für einen längeren Zeitraum nach -
+    damit lassen sich auch die historischen Kundenpreise berechnen
+    (Börsenpreis + Basiskomponente).
+    """
     from oenergy.services.account import primary_agreement
 
     agreement = primary_agreement(session, settings)
@@ -102,7 +111,7 @@ def sync_prices(session: Session, client: KrakenClient, settings: Settings) -> i
 
     count += _sync_agreement_rates(session, client, agreement, vat, settings)
     count += _sync_agreement_forecast(session, client, agreement, vat)
-    count += _sync_epex(session, client, settings)
+    count += _sync_epex(session, client, settings, history_days=history_days)
     session.commit()
     return count
 
@@ -131,7 +140,7 @@ def _sync_agreement_rates(
     except Exception as exc:  # API errors must not kill the sync
         # agreementRates is not available for customer accounts - the forecast
         # and the EPEX prices are used instead
-        logger.info("agreementRates not available for %s: %s", agreement.id, exc)
+        logger.info("agreementRates not available for {}: {}", agreement.id, exc)
         return 0
 
     for node in nodes:
@@ -158,7 +167,7 @@ def _sync_agreement_rates(
         )
         count += 1
 
-    logger.info("Stored %s agreement rates for %s", count, agreement.id)
+    logger.info("Stored {} agreement rates for {}", count, agreement.id)
     return count
 
 
@@ -219,7 +228,7 @@ def _sync_agreement_forecast(
             count += 1
 
     count += _sync_static_rates(session, agreement_data, agreement, vat)
-    logger.info("Stored %s forecast/static prices for %s", count, agreement.id)
+    logger.info("Stored {} forecast/static prices for {}", count, agreement.id)
     return count
 
 
@@ -266,11 +275,23 @@ def _sync_static_rates(
     return count
 
 
-def _sync_epex(session: Session, client: KrakenClient, settings: Settings) -> int:
+def _sync_epex(
+    session: Session,
+    client: KrakenClient,
+    settings: Settings,
+    *,
+    history_days: int = 0,
+) -> int:
     """EPEX day ahead prices (reference for the dynamic tariff)."""
     now = datetime.now(UTC).replace(tzinfo=None)
     start = now - timedelta(days=1)
     end = now + timedelta(hours=72)
+
+    if history_days:
+        wanted = now - timedelta(days=history_days)
+        oldest = session.scalar(select(func.min(Price.starts_at)).where(Price.scope == "epex"))
+        if oldest is None or oldest > wanted:
+            start = wanted
 
     try:
         nodes = client.paginate(
@@ -279,7 +300,7 @@ def _sync_epex(session: Session, client: KrakenClient, settings: Settings) -> in
             edges_path=("epexDayAheadPrices",),
         )
     except Exception as exc:
-        logger.warning("epexDayAheadPrices failed: %s", exc)
+        logger.warning("epexDayAheadPrices failed: {}", exc)
         return 0
 
     count = 0
@@ -288,6 +309,9 @@ def _sync_epex(session: Session, client: KrakenClient, settings: Settings) -> in
         ends_at = parse_datetime(node.get("periodEnd"))
         value = parse_decimal(node.get("value"))
         if starts_at is None or value is None:
+            continue
+        if value <= 0.001:
+            # die API liefert für nicht vorhandene Slots -0.001
             continue
         # EPEX values are given in EUR/MWh -> ct/kWh is /10
         ct = value / 10.0
@@ -306,7 +330,7 @@ def _sync_epex(session: Session, client: KrakenClient, settings: Settings) -> in
         )
         count += 1
 
-    logger.info("Stored %s EPEX prices", count)
+    logger.info("Stored {} EPEX prices", count)
     return count
 
 

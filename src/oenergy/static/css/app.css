@@ -218,9 +218,39 @@ a:hover { text-decoration: underline; }
 .heatmap-cell {
   height: 20px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--info) calc(var(--v, 0) * 100%), var(--bg-soft));
+  background: var(--border-soft);
+}
+.heatmap-cell.is-cheap {
+  background: color-mix(in srgb, var(--accent) calc(var(--l, .5) * 100%), var(--bg-soft));
+}
+.heatmap-cell.is-mid {
+  background: color-mix(in srgb, var(--warn) calc(var(--l, .5) * 100%), var(--bg-soft));
+}
+.heatmap-cell.is-expensive {
+  background: color-mix(in srgb, var(--danger) calc(var(--l, .5) * 100%), var(--bg-soft));
 }
 .heatmap-cell.is-empty { background: var(--border-soft); }
+
+.heatmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.heatmap-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: -2px;
+  margin-right: 5px;
+}
+.heatmap-swatch.is-cheap { background: var(--accent); }
+.heatmap-swatch.is-mid { background: var(--warn); }
+.heatmap-swatch.is-expensive { background: var(--danger); }
 .heatmap-hours { display: flex; gap: 2px; margin-left: 50px; margin-bottom: 6px; min-width: 520px; }
 .heatmap-hours span {
   flex: 1;

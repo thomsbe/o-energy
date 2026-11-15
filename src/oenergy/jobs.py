@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from loguru import logger
 
 from oenergy.config import Settings, get_settings
 from oenergy.services.sync import run_job
-
-logger = logging.getLogger(__name__)
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -18,9 +16,9 @@ _scheduler: BackgroundScheduler | None = None
 def _job(name: str) -> None:
     try:
         run = run_job(name)
-        logger.info("Job %s finished with status %s (%s items)", name, run.status, run.items)
+        logger.info("Job {} finished with status {} ({} items)", name, run.status, run.items)
     except Exception:
-        logger.exception("Job %s crashed", name)
+        logger.exception("Job {} crashed", name)
 
 
 def start_scheduler(settings: Settings | None = None) -> BackgroundScheduler | None:

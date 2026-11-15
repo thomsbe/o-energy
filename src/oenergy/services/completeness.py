@@ -12,7 +12,6 @@ therefore has a state:
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -22,8 +21,6 @@ from sqlalchemy.orm import Session
 from oenergy.config import Settings
 from oenergy.db.models import DailyStat, Interval, Meter
 from oenergy.utils import local_day
-
-logger = logging.getLogger(__name__)
 
 STATE_AWAITING = "awaiting"
 STATE_DELAYED = "delayed"

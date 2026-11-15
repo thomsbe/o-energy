@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     db_url: str = "sqlite:///./data/o-energy.db"
     timezone: str = "Europe/Berlin"
 
+    # --- Logging ----------------------------------------------------------
+    log_level: str = "INFO"
+    log_file: str | None = None
+    log_rotation: str = "10 MB"
+    log_retention: str = "14 days"
+
     # --- Polling ----------------------------------------------------------
     poll_interval_minutes: int = 15
     readings_backfill_days: int = 3

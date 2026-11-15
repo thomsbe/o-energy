@@ -50,21 +50,6 @@
 
   <div class="card">
     <div class="card-head">
-      <span class="card-title">Verbrauch heute</span>
-      {{ m.state_badge(consumption.today_state) }}
-    </div>
-    <div class="card-value">{{ m.kwh_pending(consumption.today_kwh, consumption.today_state) }}</div>
-    <div class="card-sub">
-      {% if consumption.today_state in ('awaiting', 'delayed') %}
-        Zählerdaten stehen noch aus
-      {% else %}
-        heute, laufend
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
       <span class="card-title">Verbrauch gestern</span>
       {{ m.state_badge(consumption.yesterday_state) }}
     </div>
@@ -89,8 +74,11 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><span class="card-title">Kosten heute</span></div>
-    <div class="card-value">{{ m.eur(costs.today_cents) }}</div>
+    <div class="card-head">
+      <span class="card-title">Kosten gestern</span>
+      {{ m.state_badge(consumption.yesterday_state) }}
+    </div>
+    <div class="card-value">{{ m.eur(costs.yesterday_cents) }}</div>
     <div class="card-sub"><span class="muted">Energie + Grundpreis</span></div>
   </div>
 
@@ -111,19 +99,30 @@
   <div class="card card-sync">
     <div class="card-head"><span class="card-title">Datenstand</span></div>
     <div class="card-value small">
-      {% if runs %}
-        {{ runs[0].started_at.strftime('%d.%m. %H:%M') }}
+      {% if last_success %}
+        {{ last_success.started_at.strftime('%d.%m. %H:%M') }}
       {% else %}
         <span class="muted">noch kein Sync</span>
       {% endif %}
     </div>
     <div class="card-sub">
-      {% if runs %}
-        <span class="badge badge-{{ 'final' if runs[0].status == 'ok' else 'delayed' }}">{{ runs[0].job }}: {{ runs[0].status }}</span>
+      {% if last_success %}
+        <span class="muted">letzter erfolgreicher Sync</span>
       {% else %}
         <span class="muted">–</span>
       {% endif %}
     </div>
+    {% if job_status %}
+      <div class="card-components">
+        {% for job in job_status %}
+          <span class="chip chip-muted"
+                title="{{ job.message or '' }}"
+                data-status="{{ job.status }}">
+            {{ job.job }}: {{ job.status }}
+          </span>
+        {% endfor %}
+      </div>
+    {% endif %}
   </div>
 
 </div>

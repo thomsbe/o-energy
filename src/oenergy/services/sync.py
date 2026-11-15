@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from oenergy.api import queries
@@ -16,8 +16,6 @@ from oenergy.db.models import Bill, SyncRun
 from oenergy.services import completeness, consumption, costs, prices
 from oenergy.services.account import primary_agreement, sync_account
 from oenergy.utils import parse_date, parse_decimal
-
-logger = logging.getLogger(__name__)
 
 
 def _record(session: Session, run: SyncRun) -> None:
@@ -36,10 +34,6 @@ def job_prices(session: Session, client: KrakenClient, settings: Settings) -> in
 
 def job_readings(session: Session, client: KrakenClient, settings: Settings) -> int:
     stored = consumption.sync_readings(session, client, settings)
-    consumption.rebuild_intervals(session, settings)
-    # the supply point delivers the real 15 minute values - they win over the
-    # values derived from the cumulative register
-    stored += consumption.sync_supply_point_intervals(session, client, settings)
     costs.compute_costs(session, settings)
     completeness.recompute(session, settings)
     return stored
@@ -47,6 +41,9 @@ def job_readings(session: Session, client: KrakenClient, settings: Settings) -> 
 
 def job_finalize(session: Session, client: KrakenClient, settings: Settings) -> int:
     """Re-run the daily aggregation - used after the 08:00 delivery window."""
+    # die Börsenpreise für die Historie nachladen, damit die vergangenen
+    # Kundenpreise (Börsenpreis + Basiskomponente) berechenbar bleiben
+    prices.sync_prices(session, client, settings, history_days=settings.readings_history_days)
     costs.compute_costs(session, settings)
     return completeness.recompute(session, settings)
 
@@ -118,7 +115,7 @@ def run_job(
         run.items = items
         run.message = None
     except Exception as exc:
-        logger.exception("Sync job %s failed", job_name)
+        logger.exception("Sync job {} failed", job_name)
         run.status = "error"
         run.message = f"{type(exc).__name__}: {exc}"[:2000]
         items = 0
@@ -143,6 +140,28 @@ def run_all(*, database: Database | None = None, settings: Settings | None = Non
     finally:
         client.close()
     return runs
+
+
+def status_overview(session: Session, limit: int = 20) -> dict:
+    """Der letzte Lauf je Job und der letzte erfolgreiche Lauf."""
+    runs = latest_runs(session, limit)
+    latest: dict[str, SyncRun] = {}
+    for run in runs:
+        latest.setdefault(run.job, run)
+    success = next((run for run in runs if run.status == "ok"), None)
+    return {
+        "last_success": success,
+        "jobs": latest,
+        "jobs_list": [
+            {
+                "job": run.job,
+                "status": run.status,
+                "started_at": run.started_at,
+                "message": run.message,
+            }
+            for run in sorted(latest.values(), key=lambda item: item.job)
+        ],
+    }
 
 
 def latest_runs(session: Session, limit: int = 20) -> list[SyncRun]:

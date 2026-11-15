@@ -198,6 +198,7 @@ Manuell starten:
 ```bash
 uv run oenergy sync all
 uv run oenergy sync readings
+uv run oenergy sync prices --history-days 30   # Börsenpreise für die Historie nachladen
 ```
 
 ## Konfiguration (`.env`)
@@ -217,7 +218,24 @@ uv run oenergy sync readings
 | `SLOT_MINUTES` | `15` | Länge eines Verbrauchsintervalls |
 | `ENERGY_UNIT` | `auto` | `auto`, `kwh` oder `wh` (Zählregister) |
 | `API_MIN_INTERVAL_SECONDS` | `1.2` | Mindestabstand zwischen zwei API-Requests (Rate-Limit) |
+| `LOG_LEVEL` | `INFO` | Logstufe (`DEBUG`, `INFO`, `WARNING`, …) |
+| `LOG_FILE` | – | zusätzlich in eine Datei schreiben (mit Rotation) |
+| `LOG_ROTATION` / `LOG_RETENTION` | `10 MB` / `14 days` | Rotation der Logdatei |
 | `SCHEDULER_ENABLED` | `true` | Hintergrundjobs im Web-Prozess |
+
+## Logging
+
+Die App nutzt [loguru](https://github.com/Delgan/loguru): farbige Ausgabe auf der
+Konsole, optional eine rotierende Logdatei und ein einheitliches Format – auch
+für die Logs von uvicorn, httpx, SQLAlchemy und APScheduler (diese werden
+abgefangen und weitergeleitet).
+
+```
+14:02:36 | INFO     | oenergy.services.prices:_sync_epex:307 - Stored 136 EPEX prices
+```
+
+Im Docker-Container landet das Log zusätzlich in `/data/logs/o-energy.log`
+(im Volume, mit Rotation).
 
 ## Projektstruktur
 

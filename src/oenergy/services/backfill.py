@@ -13,9 +13,8 @@ is requested from the API.  Already fetched ranges are never requested again.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from itertools import pairwise
 from zoneinfo import ZoneInfo
 
@@ -24,8 +23,6 @@ from sqlalchemy.orm import Session
 
 from oenergy.config import Settings
 from oenergy.db.models import Interval, MeterReading, ReadingWindow
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -101,6 +98,22 @@ def split_windows(windows: list[Window], max_days: int) -> list[Window]:
     return chunks
 
 
+def _expected_delivery(day: date, tz: ZoneInfo) -> datetime:
+    """When the values of a local day are expected (08:00 of the next day)."""
+    local = datetime.combine(day + timedelta(days=1), time(8, 0), tzinfo=tz)
+    return local.astimezone(UTC).replace(tzinfo=None)
+
+
+def _delivered_until(now: datetime, settings: Settings) -> datetime:
+    """The point in time up to which the utility could have delivered values."""
+    tz = ZoneInfo(settings.timezone)
+    local_today = now.replace(tzinfo=UTC).astimezone(tz).date()
+    delivery_today = _expected_delivery(local_today, tz)
+    if now >= delivery_today:
+        return now
+    return _expected_delivery(local_today - timedelta(days=1), tz)
+
+
 def data_windows(session: Session, meter_id: str) -> list[Window]:
     """Time ranges that are already covered by consumption intervals."""
     intervals = list(
@@ -172,7 +185,10 @@ def plan_queries(
     horizon_days = (
         settings.readings_history_days if not has_data(session, meter_id) else settings.readings_backfill_days
     )
-    target = snap_to_days(now - timedelta(days=horizon_days), now, tz)
+    # Only ask for values the utility could have delivered: the values of a day
+    # arrive around 08:00 of the following day.
+    delivered_until = _delivered_until(now, settings)
+    target = snap_to_days(now - timedelta(days=horizon_days), delivered_until, tz)
 
     coverage = merge_windows(data_windows(session, meter_id) + queried_windows(session, meter_id))
     gaps = subtract(target, coverage)
@@ -192,8 +208,12 @@ def plan_queries(
         stat = stats.get(day)
         if stat is not None and stat.is_final:
             continue
+        # a day is only requested once its delivery window has passed
+        delivery = _expected_delivery(day, tz)
+        if delivery > delivered_until:
+            continue
         day_start = _local_midnight(datetime.combine(day, time.min), tz)
-        day_end = day_start + timedelta(days=1)
+        day_end = min(day_start + timedelta(days=1), delivered_until)
         gaps.append(Window(day_start, day_end))
 
     gaps = merge_windows([gap for gap in gaps if gap])

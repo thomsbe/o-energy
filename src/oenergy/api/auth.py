@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from oenergy.api import queries
 from oenergy.api.errors import KrakenAuthError, KrakenError
 from oenergy.config import Settings
 from oenergy.db.models import Token
-
-logger = logging.getLogger(__name__)
 
 PostCallable = Callable[[str, dict[str, Any], str | None], dict[str, Any]]
 
@@ -79,7 +77,7 @@ class TokenManager:
                 try:
                     return self._renew_with_refresh_token(session, refresh_token)
                 except KrakenError as exc:
-                    logger.warning("Refresh token failed (%s), falling back to full login", exc.message)
+                    logger.warning("Refresh token failed ({}), falling back to full login", exc.message)
 
             return self._login(session)
 
@@ -177,7 +175,7 @@ class TokenManager:
                     session.commit()
                 logger.info("Long lived refresh token obtained")
         except KrakenError as exc:
-            logger.info("Long lived refresh token not available: %s", exc.message)
+            logger.info("Long lived refresh token not available: {}", exc.message)
 
     def _store(
         self,

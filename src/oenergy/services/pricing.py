@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from oenergy.db.models import Price
 
 DEFAULT_TZ = ZoneInfo("Europe/Berlin")
@@ -234,3 +237,101 @@ def compose_at(
             Rate(name="EPEX", net_ct=epex.net_ct_per_kwh, gross_ct=None),
         ],
     )
+
+
+@dataclass
+class PricePoint:
+    """A price that can be applied to a consumption slot."""
+
+    net_ct_per_kwh: float | None = None
+    gross_ct_per_kwh: float | None = None
+    scope: str = "customer"
+    source: str = "agreement_rates"
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+
+
+class PriceBook:
+    """In-memory price lookup for a time window.
+
+    The customer price is the sum of all rates that are valid in a window
+    (base component + variable component of the dynamic tariff).
+    """
+
+    def __init__(
+        self,
+        session: Session,
+        start: datetime,
+        end: datetime,
+        vat: float = 0.19,
+        tz: ZoneInfo = DEFAULT_TZ,
+    ) -> None:
+        rows = list(
+            session.scalars(
+                select(Price).where(Price.starts_at < end, Price.ends_at > start).order_by(Price.starts_at)
+            )
+        )
+        self._customer_rows = [row for row in rows if row.scope != "epex"]
+        self._epex_rows = [row for row in rows if row.scope == "epex"]
+        self._vat = vat
+        self._tz = tz
+        self._windows = group_rates(self._customer_rows, vat)
+        self._static_rows = [row for row in self._customer_rows if row.source == "static"]
+
+    @staticmethod
+    def _lookup(rows: list[Price], at: datetime) -> Price | None:
+        return lookup_rate(rows, at)
+
+    def _covering_window(self, at: datetime) -> RateWindow | None:
+        """The most specific window that covers ``at`` (binary search)."""
+        if not self._windows:
+            return None
+        starts = [window.starts_at for window in self._windows]
+        index = bisect_right(starts, at) - 1
+        for window in reversed(self._windows[: index + 1]):
+            if window.covers(at):
+                return window
+        return None
+
+    def at(self, at: datetime) -> PricePoint | None:
+        """The effective customer price, falling back to EPEX plus surcharge."""
+        window = self._covering_window(at)
+        if window is not None and window.gross_ct:
+            return PricePoint(
+                net_ct_per_kwh=window.net_ct,
+                gross_ct_per_kwh=window.gross_ct,
+                scope="customer",
+                source=window.source,
+                starts_at=window.starts_at,
+                ends_at=window.ends_at,
+            )
+
+        effective = compose_at(
+            self._static_rows,
+            self._epex_rows,
+            at,
+            vat=self._vat,
+            tz=self._tz,
+        )
+        if effective is not None and effective.gross_ct:
+            return PricePoint(
+                net_ct_per_kwh=effective.net_ct,
+                gross_ct_per_kwh=effective.gross_ct,
+                scope="epex" if effective.source == "epex" else "customer",
+                source=effective.source,
+                starts_at=effective.starts_at,
+                ends_at=effective.ends_at,
+            )
+
+        epex = self._lookup(self._epex_rows, at)
+        if epex is None:
+            return None
+        net = epex.net_ct_per_kwh
+        return PricePoint(
+            net_ct_per_kwh=net,
+            gross_ct_per_kwh=net * (1 + self._vat) if net is not None else None,
+            scope="epex",
+            source="epex",
+            starts_at=epex.starts_at,
+            ends_at=epex.ends_at,
+        )

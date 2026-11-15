@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx
+from loguru import logger
 
 from oenergy import __version__
 from oenergy.api.auth import TokenManager
@@ -13,8 +13,6 @@ from oenergy.api.errors import KrakenError, KrakenTransportError
 from oenergy.config import Settings, get_settings
 from oenergy.db.base import get_database
 from oenergy.db.models import Token
-
-logger = logging.getLogger(__name__)
 
 
 class KrakenClient:
@@ -83,7 +81,7 @@ class KrakenClient:
                 response = self._http.post(self._settings.api_url, json=body, headers=headers)
             except httpx.HTTPError as exc:
                 last_error = exc
-                logger.warning("API request failed (attempt %s): %s", attempt + 1, exc)
+                logger.warning("API request failed (attempt {}): {}", attempt + 1, exc)
                 time.sleep(min(2**attempt, 8))
                 continue
 
@@ -92,7 +90,7 @@ class KrakenClient:
                     f"API returned HTTP {response.status_code}",
                     code=f"HTTP_{response.status_code}",
                 )
-                logger.warning("API returned HTTP %s, retrying", response.status_code)
+                logger.warning("API returned HTTP {}, retrying", response.status_code)
                 time.sleep(min(2**attempt, 8))
                 continue
 
@@ -114,7 +112,7 @@ class KrakenClient:
                     last_error = error
                     # the API limits the request rate - wait and try again
                     wait = min(60, 20 * (attempt + 1))
-                    logger.warning("API busy (%s), waiting %s seconds", error.message[:60], wait)
+                    logger.warning("API busy ({}), waiting {} seconds", error.message[:60], wait)
                     time.sleep(wait)
                     self._throttle_seconds = min(5.0, self._throttle_seconds * 2)
                     continue
@@ -177,11 +175,11 @@ class KrakenClient:
             except KrakenError:
                 result = None
             if result is not None:
-                logger.info("Using '%s' authorization header style", other_style)
+                logger.info("Using '{}' authorization header style", other_style)
                 self._auth_style = other_style
                 return result
 
-            logger.info("Kraken token rejected (%s), renewing and retrying", exc.code)
+            logger.info("Kraken token rejected ({}), renewing and retrying", exc.code)
             token = self._tokens.access_token(force_refresh=True)
             return self._raw_post(query, variables, token)
 

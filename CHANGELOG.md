@@ -73,6 +73,26 @@ HTMX-Web-Oberfläche.
 - `refreshExpiresIn` wird als Millisekunden interpretiert (20 Tage statt 57 Jahre).
 - Der Grundpreis wird als EUR- oder Cent-Wert erkannt (10,21 €/Monat).
 
+### Geändert (Review-Runde)
+
+- Dashboard: „Kosten heute“ und „Verbrauch heute“ ersetzt durch die Werte von
+  gestern – die Daten des heutigen Tages liefert der Netzbetreiber erst am
+  Folgetag.
+- „Datenstand“ zeigt jetzt den letzten **erfolgreichen** Sync und je Job den
+  Status (statt des zuletzt fehlgeschlagenen Laufs).
+- Preis-Matrix nutzt die zusammengesetzten Preise (Börsenpreis + Basiskomponente)
+  und färbt sie nach Schwellen: unter 26 ct/kWh grün („günstig“), ab 40 ct/kWh rot
+  („teuer“), dazwischen ein Verlauf – inklusive Legende.
+- Der Backfill fragt nur noch Zeitfenster ab, für die der Netzbetreiber die Werte
+  überhaupt liefern konnte (Lieferung gegen 08:00 Uhr des Folgetages).
+- Historie der Börsenpreise wird nachgeladen (`oenergy sync prices --history-days 30`),
+  damit vergangene Kundenpreise exakt berechnet werden können.
+- Logging auf **loguru** umgestellt (farbig, Datei-Sink mit Rotation, Standardbibliothek-
+  Logs von uvicorn/httpx/SQLAlchemy werden abgefangen) – inklusive Umstellung der
+  Logmeldungen auf den `{}`-Stil.
+- Die entwertete Abfrage `supplyPoint.readings` wurde entfernt (die Verbrauchsdaten
+  kommen aus `property.measurements`).
+
 ### Lizenz
 
 - Das Projekt steht unter der **MIT-Lizenz** (`LICENSE`, `project.license = "MIT"`).

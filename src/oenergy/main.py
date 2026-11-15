@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from oenergy import __version__
 from oenergy.config import get_settings
 from oenergy.db.base import get_database
 from oenergy.jobs import start_scheduler, stop_scheduler
+from oenergy.logging_config import setup_logging
 from oenergy.web.routes import router
-
-logger = logging.getLogger(__name__)
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_DIR / "static"
@@ -42,12 +41,18 @@ def _check_token(database) -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    setup_logging(
+        level=settings.log_level,
+        log_file=settings.log_file,
+        rotation=settings.log_rotation,
+        retention=settings.log_retention,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         database = get_database()
         database.create_all()
-        logger.info("Database ready at %s", database.url)
+        logger.info("Database ready at {}", database.url)
         _check_token(database)
         start_scheduler(settings)
         try:

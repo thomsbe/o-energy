@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -11,10 +10,8 @@ from oenergy.config import Settings
 from oenergy.db.models import Agreement, DailyStat, Interval, MeterReading, Price
 from oenergy.services.account import active_meter_id
 from oenergy.services.completeness import data_state, expected_delivery_at
-from oenergy.services.pricing import compose_at, group_rates
+from oenergy.services.pricing import PriceBook, compose_at, group_rates
 from oenergy.utils import local_day, to_local
-
-logger = logging.getLogger(__name__)
 
 
 def _fmt_price(ct_per_kwh: float | None) -> str:
@@ -152,7 +149,9 @@ def cost_summary(session: Session, settings: Settings) -> dict:
         stat for stat in session.scalars(select(DailyStat)) if meter_id is None or stat.meter_id == meter_id
     ]
     stats_by_day = {stat.day: stat for stat in stats}
+    yesterday = today - timedelta(days=1)
     today_cents = sum(stat.cost_cents for stat in stats if stat.day == today)
+    yesterday_cents = sum(stat.cost_cents for stat in stats if stat.day == yesterday)
     month_cents = sum(stat.cost_cents for stat in stats if stat.day >= month_start)
     year_cents = sum(stat.cost_cents for stat in stats if stat.day >= year_start)
 
@@ -167,6 +166,7 @@ def cost_summary(session: Session, settings: Settings) -> dict:
 
     return {
         "today_cents": today_cents,
+        "yesterday_cents": yesterday_cents,
         "month_cents": month_cents,
         "year_cents": year_cents,
         "month_kwh": month_kwh,
@@ -290,42 +290,91 @@ def cost_chart_data(session: Session, settings: Settings, days: int = 30) -> dic
     }
 
 
+#: Preisschwellen für die Einordnung (brutto, ct/kWh)
+CHEAP_LIMIT = 26.0
+EXPENSIVE_LIMIT = 40.0
+#: Festpreisanteil (Basiskomponente) - die variable Komponente ist der Rest
+FIXED_PART = 20.0
+
+
+def classify_price(value: float | None) -> tuple[str, float, str]:
+    """Preisklasse: (css-Klasse, Intensität 0..1, Beschriftung)."""
+    if value is None:
+        return "is-empty", 0.0, "keine Daten"
+    if value < CHEAP_LIMIT:
+        level = min(1.0, (CHEAP_LIMIT - value) / CHEAP_LIMIT)
+        return "is-cheap", level, "günstig"
+    if value >= EXPENSIVE_LIMIT:
+        level = min(1.0, (value - EXPENSIVE_LIMIT) / EXPENSIVE_LIMIT)
+        return "is-expensive", level, "teuer"
+    level = (value - CHEAP_LIMIT) / (EXPENSIVE_LIMIT - CHEAP_LIMIT)
+    return "is-mid", level, "mittel"
+
+
 def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
-    """Day x 15 minute slot price matrix."""
+    """Day x 15 minute slot price matrix.
+
+    The prices are composed the same way as for the cost calculation: the
+    applicable rates of the agreement or - for the past - the exchange price
+    plus the fixed base component of the tariff.
+    """
     tz = ZoneInfo(settings.timezone)
     now = datetime.utcnow()
     today = now.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz).date()
     start_day = today - timedelta(days=days - 1)
+    vat = float(_vat_rate(session))
 
-    prices = list(
-        session.scalars(
-            select(Price)
-            .where(
-                Price.scope == "customer",
-                Price.starts_at >= start_day - timedelta(days=1),
-            )
-            .order_by(Price.starts_at)
-        )
+    window_start = (
+        datetime.combine(start_day, datetime.min.time(), tzinfo=tz)
+        .astimezone(ZoneInfo("UTC"))
+        .replace(tzinfo=None)
     )
-    if not prices:
-        prices = list(session.scalars(select(Price).where(Price.scope == "epex").order_by(Price.starts_at)))
+    book = PriceBook(
+        session,
+        window_start,
+        now + timedelta(days=1),
+        vat=vat,
+        tz=tz,
+    )
 
     slots_per_day = settings.slots_per_day
-    matrix: list[list[float | None]] = []
+    matrix: list[list[dict | None]] = []
     labels: list[str] = []
     for offset in range(days):
         day = start_day + timedelta(days=offset)
         labels.append(day.isoformat())
-        row: list[float | None] = [None] * slots_per_day
-        for price in prices:
-            local = to_local(price.starts_at, tz)
-            if local is None or local.date() != day:
+        row: list[dict | None] = []
+        for index in range(slots_per_day):
+            local = datetime.combine(day, datetime.min.time(), tzinfo=tz) + timedelta(
+                minutes=index * settings.slot_minutes
+            )
+            at = local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            price = book.at(at)
+            if price is None or price.gross_ct_per_kwh is None:
+                row.append(None)
                 continue
-            index = min(slots_per_day - 1, (local.hour * 60 + local.minute) // settings.slot_minutes)
-            row[index] = price.gross_ct_per_kwh or price.net_ct_per_kwh
+            value = price.gross_ct_per_kwh
+            css_class, level, label = classify_price(value)
+            row.append(
+                {
+                    "value": value,
+                    "net": price.net_ct_per_kwh,
+                    "epex": round(value - FIXED_PART, 2),
+                    "variable": round(value - FIXED_PART, 2),
+                    "class": css_class,
+                    "level": round(level, 3),
+                    "label": label,
+                }
+            )
         matrix.append(row)
 
-    return {"labels": labels, "matrix": matrix, "slot_minutes": settings.slot_minutes}
+    return {
+        "labels": labels,
+        "matrix": matrix,
+        "slot_minutes": settings.slot_minutes,
+        "cheap_limit": CHEAP_LIMIT,
+        "expensive_limit": EXPENSIVE_LIMIT,
+    }
 
 
 def cheapest_windows(session: Session, settings: Settings, hours: int = 24, count: int = 5) -> list[dict]:
