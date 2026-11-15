@@ -7,6 +7,13 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+Nichts vorbereitet.
+
+## [1.2.0] – 2026-11-15
+
+Die App ist jetzt fürs Telefon gemacht: installierbar als progressive Web App,
+optimiertes Layout und eine Push-Nachricht, sobald die Daten des Vortags da sind.
+
 ### Hinzugefügt
 
 - **Progressive Web App**: Manifest, Icons, Service Worker und eine Offline-Seite –
@@ -20,7 +27,8 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
   Vortags, schickt die App eine Nachricht an das Telefon
   („Neue Daten vom 14.11.: 8,5 kWh für 4,40 €“). Abonnement über die Seite
   *System*, Testnachricht per Button. Die VAPID-Schlüssel werden automatisch
-  erzeugt und in der Datenbank abgelegt.
+  erzeugt und in der Datenbank abgelegt – Zustellung an Chrome/FCM und
+  Firefox/Mozilla bestätigt.
 - **Zugriff ohne Anmeldung für lokale Tests**: `AUTH_LOCAL_BYPASS` (Host und
   Quelle müssen lokal sein) oder das Secret-Header `X-OEnergy-Token`
   (`oenergy generate-token --write-env` – der Wert steht nur in der `.env`).
