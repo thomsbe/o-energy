@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -278,6 +279,22 @@ class SyncRun(Base):
     status: Mapped[str] = mapped_column(String(20), default="running")
     items: Mapped[int] = mapped_column(Integer, default=0)
     message: Mapped[str | None] = mapped_column(Text)
+
+
+class WebauthnCredential(Base):
+    """Ein registrierter Passkey (WebAuthn) für den einzigen Benutzer."""
+
+    __tablename__ = "webauthn_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    credential_id: Mapped[str] = mapped_column(String(255), unique=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    sign_count: Mapped[int] = mapped_column(Integer, default=0)
+    transports: Mapped[str | None] = mapped_column(Text)
+    aaguid: Mapped[str | None] = mapped_column(String(64))
+    label: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class AppSetting(Base):

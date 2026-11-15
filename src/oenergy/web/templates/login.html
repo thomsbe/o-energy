@@ -20,21 +20,121 @@
     <p class="login-sub">Octopus Energy Dashboard</p>
 
     {% if error %}
-      <div class="login-error">Benutzername oder Passwort ist falsch.</div>
+      <div class="login-error">
+        {% if error == '1' %}Das Passwort ist falsch.
+        {% elif error %}{{ error }}
+        {% endif %}
+      </div>
     {% endif %}
 
     <form method="post" action="/login" class="login-form">
       <input type="hidden" name="next" value="{{ next }}">
-      <label for="username">Benutzername</label>
-      <input id="username" name="username" type="text" value="{{ username }}"
-             autocomplete="username" autofocus required>
-
       <label for="password">Passwort</label>
       <input id="password" name="password" type="password"
-             autocomplete="current-password" required>
-
+             autocomplete="current-password" autofocus required>
       <button type="submit" class="btn btn-primary">Anmelden</button>
     </form>
+
+    <div class="login-divider"><span>oder</span></div>
+
+    <button type="button" class="btn btn-passkey" id="passkey-login">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2a5 5 0 0 0-5 5v3a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5Z"/>
+        <path d="M4 12a8 8 0 0 0 16 0"/>
+        <path d="M12 20v2"/>
+      </svg>
+      Mit Passkey anmelden
+    </button>
+    <p class="login-hint" id="passkey-hint" hidden></p>
   </main>
+
+  <script>
+    (function () {
+      var button = document.getElementById("passkey-login");
+      var hint = document.getElementById("passkey-hint");
+
+      function show(text) {
+        hint.hidden = false;
+        hint.textContent = text;
+      }
+
+      function b64urlToBuffer(value) {
+        var padded = value.replace(/-/g, "+").replace(/_/g, "/");
+        while (padded.length % 4) { padded += "="; }
+        var raw = atob(padded);
+        var buffer = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) { buffer[i] = raw.charCodeAt(i); }
+        return buffer;
+      }
+
+      function bufferToB64url(buffer) {
+        var bytes = new Uint8Array(buffer);
+        var binary = "";
+        for (var i = 0; i < bytes.length; i++) { binary += String.fromCharCode(bytes[i]); }
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      }
+
+      button.addEventListener("click", async function () {
+        if (!window.PublicKeyCredential) {
+          show("Dieser Browser unterstützt keine Passkeys.");
+          return;
+        }
+        button.disabled = true;
+        try {
+          var optionsResponse = await fetch("/api/auth/passkey/login/options?next=" + encodeURIComponent("{{ next }}"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+          var payload = await optionsResponse.json();
+          if (!optionsResponse.ok) {
+            show(payload.error || "Passkey-Anmeldung ist nicht möglich.");
+            button.disabled = false;
+            return;
+          }
+
+          var options = payload.options;
+          options.challenge = b64urlToBuffer(options.challenge);
+          if (options.allowCredentials) {
+            options.allowCredentials = options.allowCredentials.map(function (item) {
+              return Object.assign({}, item, { id: b64urlToBuffer(item.id) });
+            });
+          }
+
+          var credential = await navigator.credentials.get({ publicKey: options });
+          if (!credential) { button.disabled = false; return; }
+
+          var verifyResponse = await fetch("/api/auth/passkey/login/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              credential: {
+                id: credential.id,
+                rawId: bufferToB64url(credential.rawId),
+                type: credential.type,
+                response: {
+                  authenticatorData: bufferToB64url(credential.response.authenticatorData),
+                  clientDataJSON: bufferToB64url(credential.response.clientDataJSON),
+                  signature: bufferToB64url(credential.response.signature),
+                  userHandle: credential.response.userHandle ? bufferToB64url(credential.response.userHandle) : null,
+                },
+              },
+            }),
+          });
+          var result = await verifyResponse.json();
+          if (verifyResponse.ok) {
+            window.location.href = payload.next || "/";
+            return;
+          }
+          show(result.error || "Anmeldung fehlgeschlagen.");
+        } catch (error) {
+          show(error && error.name === "NotAllowedError"
+            ? "Anmeldung abgebrochen."
+            : "Anmeldung fehlgeschlagen: " + error);
+        }
+        button.disabled = false;
+      });
+    })();
+  </script>
 </body>
 </html>

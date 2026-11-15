@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     session_max_age_days: int = 14
     cookie_secure: bool = False  # auf True setzen, wenn die App nur über HTTPS erreichbar ist
 
+    # --- WebAuthn / Passkey -----------------------------------------------
+    webauthn_enabled: bool = True
+    webauthn_rp_id: str | None = None  # Hostname (Standard: der Host der Anfrage)
+    webauthn_rp_name: str = "o-energy"
+    webauthn_origin: str | None = None  # z.B. https://strom.example.de
+
     # --- Logging ----------------------------------------------------------
     log_level: str = "INFO"
     log_file: str | None = None

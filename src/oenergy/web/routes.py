@@ -82,10 +82,9 @@ def page_login(request: Request) -> HTMLResponse:
 async def do_login(request: Request) -> Response:
     settings = get_settings()
     form = await request.form()
-    username = str(form.get("username", ""))
     password = str(form.get("password", ""))
     target = str(form.get("next", "/") or "/")
-    if login(request, username, password, settings):
+    if login(request, password, settings):
         return redirect_to_login(target)
     return RedirectResponse(url="/login?error=1", status_code=303)
 

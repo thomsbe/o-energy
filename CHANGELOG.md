@@ -9,6 +9,11 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- **Passkeys (WebAuthn)**: Anmeldung per Fingerabdruck, Gesicht oder Geräte-PIN
+  über `py_webauthn`, ohne Benutzername (es gibt nur einen Benutzer).
+  Registrierung auf der Seite *System*, Anmeldung über die Login-Seite.
+  RP-ID und Origin kommen aus `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` oder werden aus
+  der Anfrage abgeleitet.
 - **Anmeldung mit Benutzername und Passwort** (Argon2id über `pwdlib`, Sitzung in
   einem signierten Cookie). Ein Benutzer genügt: `oenergy set-password` erzeugt
   den Hash für die `.env`. Ohne gesetzten Hash bleibt die App offen und weist

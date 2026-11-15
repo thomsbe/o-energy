@@ -102,15 +102,16 @@ def ensure_session_secret(settings: Settings, database) -> str:
         return row.value
 
 
-def login(request: Request, username: str, password: str, settings: Settings) -> bool:
-    """Prüft die Zugangsdaten und legt die Sitzung an."""
+def login(request: Request, password: str, settings: Settings) -> bool:
+    """Prüft das Passwort und legt die Sitzung an.
+
+    Es gibt nur einen Benutzer, deshalb wird kein Benutzername abgefragt.
+    """
     if not auth_enabled(settings):
-        return False
-    if username != settings.auth_username:
         return False
     if not verify_password(password, settings.auth_password_hash or ""):
         return False
-    request.session["user"] = username
+    request.session["user"] = settings.auth_username
     return True
 
 

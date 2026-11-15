@@ -81,6 +81,25 @@
 
 <section class="panel">
   <header class="panel-head">
+    <h2>Passkey</h2>
+    <span class="panel-sub">Anmeldung ohne Passwort (WebAuthn)</span>
+  </header>
+  <p class="panel-sub" style="margin-bottom:12px">
+    Ein Passkey ist ein Schlüssel, der im Browser oder auf dem Gerät gespeichert
+    liegt und sich per Fingerabdruck, Gesicht oder Geräte-PIN bestätigen lässt.
+    Für den Zugriff von unterwegs ist das deutlich bequemer als ein Passwort.
+  </p>
+  <div class="passkey-list" id="passkey-list">
+    <p class="muted">Wird geladen …</p>
+  </div>
+  <div class="panel-actions" style="margin-top:14px">
+    <button type="button" class="btn" id="passkey-register">Neuen Passkey registrieren</button>
+    <span class="muted" id="passkey-status"></span>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
     <h2>Zugang</h2>
     <span class="panel-sub">Token-Laufzeiten</span>
   </header>
@@ -292,3 +311,130 @@
 </section>
 
 {% endblock %}
+
+<script>
+  (function () {
+    var list = document.getElementById("passkey-list");
+    var registerButton = document.getElementById("passkey-register");
+    var status = document.getElementById("passkey-status");
+    if (!list) { return; }
+
+    function b64urlToBuffer(value) {
+      var padded = value.replace(/-/g, "+").replace(/_/g, "/");
+      while (padded.length % 4) { padded += "="; }
+      var raw = atob(padded);
+      var buffer = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) { buffer[i] = raw.charCodeAt(i); }
+      return buffer;
+    }
+
+    function bufferToB64url(buffer) {
+      var bytes = new Uint8Array(buffer);
+      var binary = "";
+      for (var i = 0; i < bytes.length; i++) { binary += String.fromCharCode(bytes[i]); }
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+
+    async function load() {
+      try {
+        var response = await fetch("/api/auth/passkeys");
+        var data = await response.json();
+        if (!response.ok) { throw new Error(data.error || "nicht angemeldet"); }
+        list.innerHTML = "";
+        if (!data.passkeys.length) {
+          list.innerHTML = '<p class="muted">Noch kein Passkey registriert.</p>';
+          return;
+        }
+        data.passkeys.forEach(function (item) {
+          var row = document.createElement("div");
+          row.className = "passkey-item";
+          var name = document.createElement("span");
+          name.className = "passkey-name";
+          name.textContent = item.label || "Passkey";
+          var meta = document.createElement("span");
+          meta.className = "passkey-meta";
+          meta.textContent = item.last_used_at
+            ? "zuletzt benutzt " + new Date(item.last_used_at).toLocaleString("de-DE")
+            : "nie benutzt";
+          var spacer = document.createElement("span");
+          spacer.className = "spacer";
+          var remove = document.createElement("button");
+          remove.className = "btn";
+          remove.textContent = "Entfernen";
+          remove.addEventListener("click", async function () {
+            if (!confirm("Diesen Passkey entfernen?")) { return; }
+            await fetch("/api/auth/passkeys/" + encodeURIComponent(item.id), { method: "DELETE" });
+            load();
+          });
+          row.appendChild(name);
+          row.appendChild(meta);
+          row.appendChild(spacer);
+          row.appendChild(remove);
+          list.appendChild(row);
+        });
+      } catch (error) {
+        list.innerHTML = '<p class="muted">Passkeys konnten nicht geladen werden.</p>';
+      }
+    }
+
+    registerButton.addEventListener("click", async function () {
+      if (!window.PublicKeyCredential) {
+        status.textContent = "Dieser Browser unterstützt keine Passkeys.";
+        return;
+      }
+      registerButton.disabled = true;
+      status.textContent = "Registrierung läuft …";
+      try {
+        var optionsResponse = await fetch("/api/auth/passkey/register/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        var payload = await optionsResponse.json();
+        if (!optionsResponse.ok) { throw new Error(payload.error || "Registrierung nicht möglich"); }
+
+        var options = payload.options;
+        options.challenge = b64urlToBuffer(options.challenge);
+        options.user.id = b64urlToBuffer(options.user.id);
+        if (options.excludeCredentials) {
+          options.excludeCredentials = options.excludeCredentials.map(function (item) {
+            return Object.assign({}, item, { id: b64urlToBuffer(item.id) });
+          });
+        }
+
+        var credential = await navigator.credentials.create({ publicKey: options });
+        if (!credential) { throw new Error("Registrierung abgebrochen"); }
+
+        var label = prompt("Name für diesen Passkey:", "Passkey");
+        if (label === null) { throw new Error("Registrierung abgebrochen"); }
+
+        var verifyResponse = await fetch("/api/auth/passkey/register/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            label: label,
+            credential: {
+              id: credential.id,
+              rawId: bufferToB64url(credential.rawId),
+              type: credential.type,
+              response: {
+                attestationObject: bufferToB64url(credential.response.attestationObject),
+                clientDataJSON: bufferToB64url(credential.response.clientDataJSON),
+              },
+            },
+          }),
+        });
+        var result = await verifyResponse.json();
+        if (!verifyResponse.ok) { throw new Error(result.error || "Registrierung fehlgeschlagen"); }
+        status.textContent = "Passkey registriert.";
+        load();
+      } catch (error) {
+        status.textContent = error && error.name === "NotAllowedError"
+          ? "Registrierung abgebrochen."
+          : "Fehler: " + error;
+      }
+      registerButton.disabled = false;
+    });
+
+    load();
+  })();
+</script>

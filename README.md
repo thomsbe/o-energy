@@ -241,12 +241,23 @@ mit einem gelben Hinweis darauf hin. **Für einen Betrieb im Internet
 Verbrauchsdaten, Konto- und Zählernummer sowie die Adresse für jeden erreichbar,
 der die URL kennt.
 
-### Passkeys (optional)
+### Passkeys (WebAuthn)
 
-Für eine Anmeldung ohne Passwort gibt es mit `py_webauthn` (WebAuthn/FIDO2) eine
-reine Python-Lösung: Registrierung und Anmeldung laufen als Browser-Zeremonien
-gegen den eigenen Server. Das lässt sich als zweite Methode neben dem Passwort
-ergänzen.
+Zusätzlich zum Passwort gibt es **Passkeys**: ein Schlüssel, der im Browser oder
+auf dem Gerät liegt und per Fingerabdruck, Gesicht oder PIN bestätigt wird.
+Registrierung passiert auf der Seite *System* (angemeldet), die Anmeldung über
+den Button auf der Login-Seite – ohne Benutzername, es gibt nur einen Benutzer.
+
+Für den Browser-/Server-Abgleich ist `WEBAUTHN_ORIGIN` wichtig (die Origin, unter
+der die App erreichbar ist); die RP-ID wird daraus abgeleitet oder explizit
+gesetzt:
+
+```bash
+WEBAUTHN_ORIGIN=https://strom.example.de
+WEBAUTHN_RP_ID=strom.example.de
+```
+
+Die Umsetzung nutzt `py_webauthn` (WebAuthn/FIDO2) ohne Cloudflare-Zwang.
 
 ## Jobs
 
@@ -305,6 +316,19 @@ abgefangen und weitergeleitet).
 
 Im Docker-Container landet das Log zusätzlich in `/data/logs/o-energy.log`
 (im Volume, mit Rotation).
+
+## Mitwirken
+
+**[AGENTS.md](AGENTS.md)** enthält die vollständige Arbeitsanleitung: Aufbau,
+Technologiestapel, Teststrategie, die live verifizierten Fakten zur
+Octopus-API, Konventionen und Stolperfallen. Sie richtet sich an Menschen wie an
+KI-Agenten – wer mitwirkt, sollte sie lesen.
+
+```bash
+uv run pytest            # Tests
+uv run ruff check .      # Linting
+uv run ruff format .     # Formatierung
+```
 
 ## Projektstruktur
 

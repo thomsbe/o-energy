@@ -15,6 +15,7 @@ from oenergy.jobs import start_scheduler, stop_scheduler
 from oenergy.logging_config import setup_logging
 from oenergy.web.auth import RequireLoginMiddleware, ensure_session_secret
 from oenergy.web.routes import router
+from oenergy.web.webauthn_routes import router as webauthn_router
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_DIR / "static"
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)
+    app.include_router(webauthn_router)
 
     # Anmeldung: die Session wird von aussen nach innen aufgebaut, damit die
     # Middleware die Session bereits vorfindet.
