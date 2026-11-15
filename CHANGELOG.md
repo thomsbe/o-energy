@@ -9,6 +9,84 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 Nichts vorbereitet.
 
+## [1.0.0] – 2026-11-15
+
+Erste stabile Fassung. Die Beta 0.8.0 hat die Anbindung an die Octopus-API
+ gebracht; danach wurden im Review die Bedienung, die Auswertungen und die
+Datenpflege nachgeschärft.
+
+### Hinzugefügt
+
+- Seite „Verbrauch“: neues Diagramm „Verbrauch und Preis“ – die 15-Minuten-Slots
+  der letzten zwei Tage als Balken mit zusätzlicher Preislinie (zweite Achse), so
+  wird sichtbar, zu welchem Preis verbraucht wurde.
+- Seite „Verbrauch“: darunter der Monatsverbrauch als Balkendiagramm mit
+  Vor-/Zurück-Navigation über die Monate (endgültige Tage hell, provisorische
+  dunkel). Tage ohne Zählerdaten werden als Lücke dargestellt, nicht als 0 kWh.
+- **Backfill bis zum Ende der Historie**: die App holt die Historie schrittweise
+  weiter zurück (30 Tage pro Lauf), bis die API keine Werte mehr liefert. Der
+  Zustand wird am Zähler vermerkt (`history_start`, `history_exhausted`) – danach
+  wird nicht mehr weitergefragt. Die verbleibende Historie steht auf der
+  System-Seite.
+- **System-Seite** zeigt jetzt die Daten aus der API: angemeldeter Nutzer,
+  Konto mit Anbieter, Status und Saldo, Verträge (Produktcode, Preisart,
+  Lieferpunkt, Grundpreis, USt), Lieferpunkt mit Adresse, MaLo- und
+  Zählernummer sowie den Stand der Datenhistorie.
+- **Export und Import**: der gesamte Datenbestand lässt sich als JSON exportieren
+  (`oenergy export`) und wieder zurückspielen (`oenergy import`). Das Format ist
+  schemaunabhängig und die Verarbeitung idempotent – ein Import ändert nichts
+  doppelt. Im Web gibt es den Export als Download auf der System-Seite.
+- Das Backup-Skript erstellt jetzt zusätzlich zum SQLite-Backup einen
+  JSON-Export und behält die 10 neuesten Sicherungen.
+
+### Geändert
+
+- Dashboard: „Kosten heute“ und „Verbrauch heute“ ersetzt durch die Werte von
+  gestern – die Daten des heutigen Tages liefert der Netzbetreiber erst am
+  Folgetag.
+- „Datenstand“ zeigt jetzt den letzten **erfolgreichen** Sync und je Job den
+  Status (statt des zuletzt fehlgeschlagenen Laufs).
+- Preis-Matrix nutzt die zusammengesetzten Preise (Börsenpreis + Basiskomponente)
+  und färbt sie mit einem durchgehenden Verlauf von grün (günstig) über gelb
+  (normal) bis rot (teuer); die Schwellen sind über `PRICE_CHEAP_LIMIT` und
+  `PRICE_EXPENSIVE_LIMIT` konfigurierbar.
+- Der Backfill fragt nur noch Zeitfenster ab, für die der Netzbetreiber die Werte
+  überhaupt liefern konnte (Lieferung gegen 08:00 Uhr des Folgetages).
+- Historie der Börsenpreise wird nachgeladen (`oenergy sync prices --history-days 30`),
+  damit vergangene Kundenpreise exakt berechnet werden können.
+- Logging auf **loguru** umgestellt (farbig, Datei-Sink mit Rotation, Standardbibliothek-
+  Logs von uvicorn/httpx/SQLAlchemy werden abgefangen) – inklusive Umstellung der
+  Logmeldungen auf den `{}`-Stil.
+- Die entwertete Abfrage `supplyPoint.readings` wurde entfernt (die Verbrauchsdaten
+  kommen aus `property.measurements`).
+
+### Behoben
+
+- **Zeitzone**: die Zeitstempel in der Oberfläche wurden in UTC statt in der
+  lokalen Zeit angezeigt (Sync-Läufe wirkten eine Stunde zu früh). Alle
+  Anzeigen werden jetzt nach `TIMEZONE` umgerechnet - auch die Ausgaben von
+  `oenergy token-info`.
+- **„Heute“ entfernt**: der heutige Tag kann keine Zählerdaten haben (Lieferung
+  erst am Folgetag). Die Kacheln „Verbrauch heute“ und „Kosten heute“ sowie der
+  heutige Tag in den Diagrammen (Verbrauchsprofil, Tageskosten) sind entfernt.
+- **Diagnose ohne Passwort**: `oenergy diagnose` nutzt jetzt den gespeicherten
+  Token und funktioniert auch ohne Zugangsdaten in der `.env`. `oenergy login`
+  sagt klar, dass für eine Anmeldung das Passwort nötig ist.
+- Die Monatsprognose war fehlerhaft: sie zählte die bereits angefallenen Kosten
+  nicht mit und doppelte den heutigen Tag. Jetzt ist sie die erwarteten
+  **Gesamtkosten des Monats** (bereits angefallen + offene Tage × Tagesschnitt
+  der letzten 7 Tage) – mit Angabe der Unsicherheit (± Standardabweichung je Tag
+  × Wurzel aus der Zahl der offenen Tage). Die Unsicherheit sinkt also, je näher
+  das Monatsende rückt.
+
+### Sicherheit
+
+- Die Zugangs-Kachel auf der System-Seite zeigt den tatsächlichen Token-Status
+  (Refresh-Token aktiv mit Restlaufzeit, Token aktiv, erneuern nötig) statt nur zu
+  prüfen, ob das Passwort in der `.env` steht.
+- Der letzte erfolgreiche Sync wird auch in älteren Läufen gesucht, damit die
+  Kachel nicht fälschlich „noch kein Sync“ anzeigt.
+
 ## [0.8.0] – 2026-11-15 (Beta)
 
 Erste öffentliche Fassung: die App holt die Octopus-Energy-DE-Daten selbst von der
@@ -72,76 +150,6 @@ HTMX-Web-Oberfläche.
 - Die USt wird normalisiert (die API liefert 19 statt 0,19).
 - `refreshExpiresIn` wird als Millisekunden interpretiert (20 Tage statt 57 Jahre).
 - Der Grundpreis wird als EUR- oder Cent-Wert erkannt (10,21 €/Monat).
-
-### Geändert (Review-Runde)
-
-- Dashboard: „Kosten heute“ und „Verbrauch heute“ ersetzt durch die Werte von
-  gestern – die Daten des heutigen Tages liefert der Netzbetreiber erst am
-  Folgetag.
-- „Datenstand“ zeigt jetzt den letzten **erfolgreichen** Sync und je Job den
-  Status (statt des zuletzt fehlgeschlagenen Laufs).
-- Preis-Matrix nutzt die zusammengesetzten Preise (Börsenpreis + Basiskomponente)
-  und färbt sie mit einem durchgehenden Verlauf von grün (günstig) über gelb
-  (normal) bis rot (teuer); die Schwellen sind über `PRICE_CHEAP_LIMIT` und
-  `PRICE_EXPENSIVE_LIMIT` konfigurierbar.
-- Der Backfill fragt nur noch Zeitfenster ab, für die der Netzbetreiber die Werte
-  überhaupt liefern konnte (Lieferung gegen 08:00 Uhr des Folgetages).
-- Historie der Börsenpreise wird nachgeladen (`oenergy sync prices --history-days 30`),
-  damit vergangene Kundenpreise exakt berechnet werden können.
-- Logging auf **loguru** umgestellt (farbig, Datei-Sink mit Rotation, Standardbibliothek-
-  Logs von uvicorn/httpx/SQLAlchemy werden abgefangen) – inklusive Umstellung der
-  Logmeldungen auf den `{}`-Stil.
-- Die entwertete Abfrage `supplyPoint.readings` wurde entfernt (die Verbrauchsdaten
-  kommen aus `property.measurements`).
-
-### Erweitert (Review-Runde 2)
-
-- Seite „Verbrauch“: neues Diagramm „Verbrauch und Preis“ – die 15-Minuten-Slots
-  der letzten zwei Tage als Balken mit zusätzlicher Preislinie (zweite Achse), so
-  wird sichtbar, zu welchem Preis verbraucht wurde.
-- Seite „Verbrauch“: darunter der Monatsverbrauch als Balkendiagramm mit
-  Vor-/Zurück-Navigation über die Monate (endgültige Tage hell, provisorische
-  dunkel). Tage ohne Zählerdaten werden als Lücke dargestellt, nicht als 0 kWh.
-
-### Erweitert (Review-Runde 3)
-
-- **Backfill bis zum Ende der Historie**: die App holt die Historie schrittweise
-  weiter zurück (30 Tage pro Lauf), bis die API keine Werte mehr liefert. Der
-  Zustand wird am Zähler vermerkt (`history_start`, `history_exhausted`) – danach
-  wird nicht mehr weitergefragt. Die verbleibende Historie steht auf der
-  System-Seite.
-- **System-Seite** zeigt jetzt die Daten aus der API: angemeldeter Nutzer,
-  Konto mit Anbieter, Status und Saldo, Verträge (Produktcode, Preisart,
-  Lieferpunkt, Grundpreis, USt), Lieferpunkt mit Adresse, MaLo- und
-  Zählernummer sowie den Stand der Datenhistorie.
-- **Export und Import**: der gesamte Datenbestand lässt sich als JSON exportieren
-  (`oenergy export`) und wieder zurückspielen (`oenergy import`). Das Format ist
-  schemaunabhängig und die Verarbeitung idempotent – ein Import ändert nichts
-  doppelt. Im Web gibt es den Export als Download auf der System-Seite.
-- Das Backup-Skript erstellt jetzt zusätzlich zum SQLite-Backup einen
-  JSON-Export und behält die 10 neuesten Sicherungen.
-
-### Behoben (Review-Runde 4)
-
-- **Zeitzone**: die Zeitstempel in der Oberfläche wurden in UTC statt in der
-  lokalen Zeit angezeigt (Sync-Läufe wirkten eine Stunde zu früh). Alle
-  Anzeigen werden jetzt nach `TIMEZONE` umgerechnet - auch die Ausgaben von
-  `oenergy token-info`.
-- **„Heute“ entfernt**: der heutige Tag kann keine Zählerdaten haben (Lieferung
-  erst am Folgetag). Die Kacheln „Verbrauch heute“ und „Kosten heute“ sowie der
-  heutige Tag in den Diagrammen (Verbrauchsprofil, Tageskosten) sind entfernt.
-- **Diagnose ohne Passwort**: `oenergy diagnose` nutzt jetzt den gespeicherten
-  Token und funktioniert auch ohne Zugangsdaten in der `.env`. `oenergy login`
-  sagt klar, dass für eine Anmeldung das Passwort nötig ist.
-
-### Behoben
-
-- Die Monatsprognose war fehlerhaft: sie zählte die bereits angefallenen Kosten
-  nicht mit und doppelte den heutigen Tag. Jetzt ist sie die erwarteten
-  **Gesamtkosten des Monats** (bereits angefallen + offene Tage × Tagesschnitt
-  der letzten 7 Tage) – mit Angabe der Unsicherheit (± Standardabweichung je Tag
-  × Wurzel aus der Zahl der offenen Tage). Die Unsicherheit sinkt also, je näher
-  das Monatsende rückt.
 
 ### Lizenz
 
