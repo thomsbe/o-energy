@@ -37,20 +37,31 @@ def token_status(session: Session) -> dict[str, Any]:
     new login is needed."""
     token = session.get(Token, 1)
     if token is None or not token.access_token:
-        return {"logged_in": False}
+        return {"logged_in": False, "state": "missing"}
 
     now = datetime.utcnow()
     refresh_left = None
     if token.refresh_expires_at:
         refresh_left = (token.refresh_expires_at - now).days
+    needs_login = bool(refresh_left is not None and refresh_left <= 0)
+    expires_soon = bool(refresh_left is not None and 0 < refresh_left <= 7)
+
+    if needs_login:
+        state = "renew"
+    elif refresh_left is not None:
+        state = "refresh"
+    else:
+        state = "token"
+
     return {
         "logged_in": True,
+        "state": state,
         "access_expires_at": token.expires_at,
         "refresh_expires_at": token.refresh_expires_at,
         "refresh_days_left": refresh_left,
         "refresh_kind": token.refresh_kind,
-        "needs_login": bool(refresh_left is not None and refresh_left <= 0),
-        "expires_soon": bool(refresh_left is not None and 0 < refresh_left <= 7),
+        "needs_login": needs_login,
+        "expires_soon": expires_soon,
     }
 
 

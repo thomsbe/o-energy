@@ -87,3 +87,33 @@ def test_export_endpoint_returns_a_gzip_download(client, seeded) -> None:
     assert payload["format"] == "o-energy-export"
     assert payload["format_version"] == 1
     assert payload["tables"]["intervals"]
+
+
+def test_access_tile_reflects_the_token_state(client, session) -> None:
+    from datetime import datetime, timedelta
+
+    from oenergy.db.models import Token
+
+    # noch kein Login
+    response = client.get("/system")
+    assert "nicht angemeldet" in response.text
+
+    # Token und Refresh-Token vorhanden
+    row = Token(id=1)
+    row.access_token = "abc"
+    row.expires_at = datetime.utcnow() + timedelta(hours=1)
+    row.refresh_token = "def"
+    row.refresh_expires_at = datetime.utcnow() + timedelta(days=20)
+    session.add(row)
+    session.commit()
+
+    response = client.get("/system")
+    assert "Refresh-Token aktiv" in response.text
+    assert "fehlen" not in response.text
+
+    # Refresh-Token abgelaufen
+    row.refresh_expires_at = datetime.utcnow() - timedelta(days=1)
+    session.commit()
+
+    response = client.get("/system")
+    assert "erneut anmelden" in response.text

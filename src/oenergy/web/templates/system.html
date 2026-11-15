@@ -27,10 +27,37 @@
       <div class="card-sub"><span class="muted">holt nachgelieferte Zählerdaten nach</span></div>
     </div>
     <div class="card">
-      <div class="card-head"><span class="card-title">Zugangsdaten</span></div>
+      <div class="card-head"><span class="card-title">Zugang</span></div>
       <div class="card-value small">
-        {% if has_credentials %}<span class="badge badge-final">konfiguriert</span>
-        {% else %}<span class="badge badge-delayed">fehlen</span>{% endif %}
+        {% if token.state == 'renew' %}
+          <span class="badge badge-delayed">erneut anmelden</span>
+        {% elif token.state == 'refresh' %}
+          {% if token.expires_soon %}
+            <span class="badge badge-partial">Refresh-Token läuft ab</span>
+          {% else %}
+            <span class="badge badge-final">Refresh-Token aktiv</span>
+          {% endif %}
+        {% elif token.state == 'token' %}
+          <span class="badge badge-final">Token aktiv</span>
+        {% else %}
+          <span class="badge badge-delayed">nicht angemeldet</span>
+        {% endif %}
+      </div>
+      <div class="card-sub">
+        {% if token.state == 'renew' %}
+          <span class="muted">Refresh-Token abgelaufen</span>
+        {% elif token.refresh_days_left is not none %}
+          <span class="muted">
+            läuft noch {{ token.refresh_days_left }} Tage
+            {% if token.expires_soon %}
+              - bald wieder anmelden
+            {% endif %}
+          </span>
+        {% elif token.state == 'token' %}
+          <span class="muted">kein Refresh-Token</span>
+        {% else %}
+          <span class="muted">Zugangsdaten fehlen</span>
+        {% endif %}
       </div>
     </div>
   </div>
