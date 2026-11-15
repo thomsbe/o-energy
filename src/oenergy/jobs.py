@@ -81,7 +81,7 @@ def start_scheduler(settings: Settings | None = None) -> BackgroundScheduler | N
     scheduler.start()
     _scheduler = scheduler
     logger.info(
-        "Scheduler started (prices every %s min, readings hourly, finalize daily 08:17, bills daily 06:12)",
+        "Scheduler started (prices every {} min, readings hourly, finalize daily 08:17, bills daily 06:12)",
         settings.poll_interval_minutes,
     )
     return scheduler
