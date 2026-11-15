@@ -63,10 +63,14 @@
     <div class="heatmap">
       {% if heatmap.matrix %}
       <div class="heatmap-legend">
-        <span><i class="heatmap-swatch is-cheap"></i> günstig</span>
-        <span><i class="heatmap-swatch is-mid"></i> mittel</span>
-        <span><i class="heatmap-swatch is-expensive"></i> teuer</span>
-        <span class="muted">Schwellen brutto: unter {{ heatmap.cheap_limit|default(26) }} ct/kWh günstig, ab {{ heatmap.expensive_limit|default(40) }} ct/kWh teuer</span>
+        <span class="heatmap-gradient" aria-hidden="true"></span>
+        <span>günstig</span>
+        <span class="muted">unter {{ heatmap.cheap_limit|default(26) }} ct/kWh</span>
+        <span class="muted">·</span>
+        <span>normal</span>
+        <span class="muted">·</span>
+        <span>teuer</span>
+        <span class="muted">ab {{ heatmap.expensive_limit|default(40) }} ct/kWh (brutto)</span>
       </div>
         <div class="heatmap-hours">
           {% for hour in range(0, 24) %}
@@ -79,7 +83,7 @@
             <div class="heatmap-cells">
               {% for cell in row %}
                 {% if cell %}
-                  <span class="heatmap-cell {{ cell.class }}" style="--l: {{ cell.level }}"
+                  <span class="heatmap-cell" style="--h: {{ cell.hue }}"
                         title="{{ "%.2f"|format(cell.value) }} ct/kWh · {{ cell.label }}{% if cell.variable is not none %} · davon {{ "%.2f"|format(cell.variable) }} ct Börsenpreis{% endif %}"></span>
                 {% else %}
                   <span class="heatmap-cell is-empty" title="keine Daten"></span>

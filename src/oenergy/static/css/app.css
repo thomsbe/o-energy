@@ -1,5 +1,7 @@
 :root {
   color-scheme: dark;
+  --cell-sat: 58%;
+  --cell-light: 42%;
   --bg: #0b0f14;
   --bg-soft: #11161d;
   --card: #151b23;
@@ -24,6 +26,8 @@
 
 [data-theme="light"] {
   color-scheme: light;
+  --cell-sat: 62%;
+  --cell-light: 52%;
   --bg: #f4f6f9;
   --bg-soft: #ffffff;
   --card: #ffffff;
@@ -218,16 +222,7 @@ a:hover { text-decoration: underline; }
 .heatmap-cell {
   height: 20px;
   border-radius: 2px;
-  background: var(--border-soft);
-}
-.heatmap-cell.is-cheap {
-  background: color-mix(in srgb, var(--accent) calc(var(--l, .5) * 100%), var(--bg-soft));
-}
-.heatmap-cell.is-mid {
-  background: color-mix(in srgb, var(--warn) calc(var(--l, .5) * 100%), var(--bg-soft));
-}
-.heatmap-cell.is-expensive {
-  background: color-mix(in srgb, var(--danger) calc(var(--l, .5) * 100%), var(--bg-soft));
+  background: hsl(var(--h, 120) var(--cell-sat, 58%) var(--cell-light, 42%));
 }
 .heatmap-cell.is-empty { background: var(--border-soft); }
 
@@ -235,22 +230,26 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   margin-bottom: 10px;
   font-size: 12.5px;
   color: var(--muted);
 }
-.heatmap-swatch {
+.heatmap-gradient {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 180px;
+  height: 11px;
   border-radius: 3px;
-  vertical-align: -2px;
-  margin-right: 5px;
+  margin-right: 4px;
+  background: linear-gradient(
+    90deg,
+    hsl(165 58% 42%),
+    hsl(105 58% 42%),
+    hsl(60 62% 48%),
+    hsl(35 62% 48%),
+    hsl(0 60% 48%)
+  );
 }
-.heatmap-swatch.is-cheap { background: var(--accent); }
-.heatmap-swatch.is-mid { background: var(--warn); }
-.heatmap-swatch.is-expensive { background: var(--danger); }
 .heatmap-hours { display: flex; gap: 2px; margin-left: 50px; margin-bottom: 6px; min-width: 520px; }
 .heatmap-hours span {
   flex: 1;

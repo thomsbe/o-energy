@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -290,25 +291,63 @@ def cost_chart_data(session: Session, settings: Settings, days: int = 30) -> dic
     }
 
 
-#: Preisschwellen für die Einordnung (brutto, ct/kWh)
+#: Vorgabe-Schwellen für die Einordnung (brutto, ct/kWh) - überschreibbar
+#: über die Konfiguration (PRICE_CHEAP_LIMIT / PRICE_EXPENSIVE_LIMIT)
 CHEAP_LIMIT = 26.0
 EXPENSIVE_LIMIT = 40.0
 #: Festpreisanteil (Basiskomponente) - die variable Komponente ist der Rest
 FIXED_PART = 20.0
 
 
-def classify_price(value: float | None) -> tuple[str, float, str]:
+def _hue_anchors(cheap_limit: float, expensive_limit: float) -> tuple[tuple[float, float], ...]:
+    """Ankerpunkte des Farbverlaufs, abhängig von den konfigurierten Schwellen."""
+    middle = (cheap_limit + expensive_limit) / 2
+    return (
+        (0.0, 165.0),
+        (cheap_limit, 105.0),
+        (middle, 60.0),
+        (expensive_limit, 35.0),
+        (expensive_limit + 30.0, 0.0),
+    )
+
+
+def price_hue(
+    value: float | None,
+    cheap_limit: float = CHEAP_LIMIT,
+    expensive_limit: float = EXPENSIVE_LIMIT,
+) -> int:
+    """Farbton für einen Preis: grün (günstig) -> gelb (normal) -> rot (teuer)."""
+    if value is None:
+        return 0
+    anchors = _hue_anchors(cheap_limit, expensive_limit)
+    if value <= anchors[0][0]:
+        return int(anchors[0][1])
+    if value >= anchors[-1][0]:
+        return int(anchors[-1][1])
+    for (low_price, low_hue), (high_price, high_hue) in pairwise(anchors):
+        if low_price <= value <= high_price:
+            span = high_price - low_price
+            ratio = (value - low_price) / span if span else 0.0
+            return round(low_hue + (high_hue - low_hue) * ratio)
+    return int(anchors[-1][1])
+
+
+def classify_price(
+    value: float | None,
+    cheap_limit: float = CHEAP_LIMIT,
+    expensive_limit: float = EXPENSIVE_LIMIT,
+) -> tuple[str, float, str]:
     """Preisklasse: (css-Klasse, Intensität 0..1, Beschriftung)."""
     if value is None:
         return "is-empty", 0.0, "keine Daten"
-    if value < CHEAP_LIMIT:
-        level = min(1.0, (CHEAP_LIMIT - value) / CHEAP_LIMIT)
+    if value < cheap_limit:
+        level = min(1.0, (cheap_limit - value) / cheap_limit)
         return "is-cheap", level, "günstig"
-    if value >= EXPENSIVE_LIMIT:
-        level = min(1.0, (value - EXPENSIVE_LIMIT) / EXPENSIVE_LIMIT)
+    if value >= expensive_limit:
+        level = min(1.0, (value - expensive_limit) / expensive_limit)
         return "is-expensive", level, "teuer"
-    level = (value - CHEAP_LIMIT) / (EXPENSIVE_LIMIT - CHEAP_LIMIT)
-    return "is-mid", level, "mittel"
+    level = (value - cheap_limit) / (expensive_limit - cheap_limit)
+    return "is-mid", level, "normal"
 
 
 def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
@@ -323,6 +362,8 @@ def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
     today = now.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz).date()
     start_day = today - timedelta(days=days - 1)
     vat = float(_vat_rate(session))
+    cheap_limit = float(settings.price_cheap_limit)
+    expensive_limit = float(settings.price_expensive_limit)
 
     window_start = (
         datetime.combine(start_day, datetime.min.time(), tzinfo=tz)
@@ -354,7 +395,7 @@ def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
                 row.append(None)
                 continue
             value = price.gross_ct_per_kwh
-            css_class, level, label = classify_price(value)
+            css_class, level, label = classify_price(value, cheap_limit, expensive_limit)
             row.append(
                 {
                     "value": value,
@@ -363,6 +404,7 @@ def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
                     "variable": round(value - FIXED_PART, 2),
                     "class": css_class,
                     "level": round(level, 3),
+                    "hue": price_hue(value, cheap_limit, expensive_limit),
                     "label": label,
                 }
             )
@@ -372,8 +414,8 @@ def heatmap_data(session: Session, settings: Settings, days: int = 7) -> dict:
         "labels": labels,
         "matrix": matrix,
         "slot_minutes": settings.slot_minutes,
-        "cheap_limit": CHEAP_LIMIT,
-        "expensive_limit": EXPENSIVE_LIMIT,
+        "cheap_limit": cheap_limit,
+        "expensive_limit": expensive_limit,
     }
 
 

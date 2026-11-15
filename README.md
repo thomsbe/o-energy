@@ -16,8 +16,9 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
 ## Funktionsumfang
 
 * **Preise**: aktueller Kundenpreis (brutto), nächster Preis, EPEX-Spotpreis als
-  Referenz, Preisverlauf 48 h, Preis-Matrix (Tag × 15-Minuten-Slot), günstigste
-  Zeitfenster, CSV-Export.
+  Referenz, Preisverlauf 48 h, Preis-Matrix (Tag × 15-Minuten-Slot) mit Farbverlauf
+  von grün (günstig) über gelb (normal) bis rot (teuer), günstigste Zeitfenster,
+  CSV-Export.
   Beim Dynamic Octopus besteht der Arbeitspreis aus mehreren Raten je Zeitfenster
   (z. B. Basiskomponente + dynamische Komponente) – die App summiert sie zum
   tatsächlichen Kundenpreis und zeigt die Bestandteile an.
@@ -221,6 +222,8 @@ uv run oenergy sync prices --history-days 30   # Börsenpreise für die Historie
 | `LOG_LEVEL` | `INFO` | Logstufe (`DEBUG`, `INFO`, `WARNING`, …) |
 | `LOG_FILE` | – | zusätzlich in eine Datei schreiben (mit Rotation) |
 | `LOG_ROTATION` / `LOG_RETENTION` | `10 MB` / `14 days` | Rotation der Logdatei |
+| `PRICE_CHEAP_LIMIT` | `26.0` | ct/kWh brutto – bis hierher ist der Preis „günstig“ (grün) |
+| `PRICE_EXPENSIVE_LIMIT` | `40.0` | ct/kWh brutto – ab hier ist der Preis „teuer“ (rot) |
 | `SCHEDULER_ENABLED` | `true` | Hintergrundjobs im Web-Prozess |
 
 ## Logging

@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     meter_obis: str | None = None
     energy_unit: str = "auto"  # auto | kwh | wh
 
+    # --- Preiseinordnung (Preis-Matrix) -----------------------------------
+    price_cheap_limit: float = 26.0  # ct/kWh brutto - bis hierher "günstig"
+    price_expensive_limit: float = 40.0  # ct/kWh brutto - ab hier "teuer"
+
     @property
     def has_credentials(self) -> bool:
         return bool(self.octopus_api_key or (self.octopus_email and self.octopus_password))

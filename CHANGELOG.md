@@ -81,8 +81,9 @@ HTMX-Web-Oberfläche.
 - „Datenstand“ zeigt jetzt den letzten **erfolgreichen** Sync und je Job den
   Status (statt des zuletzt fehlgeschlagenen Laufs).
 - Preis-Matrix nutzt die zusammengesetzten Preise (Börsenpreis + Basiskomponente)
-  und färbt sie nach Schwellen: unter 26 ct/kWh grün („günstig“), ab 40 ct/kWh rot
-  („teuer“), dazwischen ein Verlauf – inklusive Legende.
+  und färbt sie mit einem durchgehenden Verlauf von grün (günstig) über gelb
+  (normal) bis rot (teuer); die Schwellen sind über `PRICE_CHEAP_LIMIT` und
+  `PRICE_EXPENSIVE_LIMIT` konfigurierbar.
 - Der Backfill fragt nur noch Zeitfenster ab, für die der Netzbetreiber die Werte
   überhaupt liefern konnte (Lieferung gegen 08:00 Uhr des Folgetages).
 - Historie der Börsenpreise wird nachgeladen (`oenergy sync prices --history-days 30`),
