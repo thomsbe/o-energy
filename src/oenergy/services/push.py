@@ -36,16 +36,26 @@ def _b64url(data: bytes) -> str:
 
 
 def generate_keys() -> tuple[str, str]:
-    """Erzeugt ein neues Schlüsselpaar (privat als PEM, öffentlich base64url)."""
+    """Erzeugt ein neues Schlüsselpaar.
+
+    Der private Schlüssel wird als base64url (32 Byte roh) gespeichert - so
+    akzeptiert ihn pywebpush direkt. Der öffentliche Schlüssel ist der
+    unkomprimierte Punkt (65 Byte), ebenfalls base64url - so braucht der
+    Browser ihn für applicationServerKey.
+    """
     private_key = ec.generate_private_key(ec.SECP256R1())
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode()
-    numbers = private_key.public_key().public_numbers()
-    raw = b"\x04" + numbers.x.to_bytes(32, "big") + numbers.y.to_bytes(32, "big")
-    return private_pem, _b64url(raw)
+    private_raw = _b64url(private_key.private_numbers().private_value.to_bytes(32, "big"))
+    public_numbers = private_key.public_key().public_numbers()
+    point = b"\x04" + public_numbers.x.to_bytes(32, "big") + public_numbers.y.to_bytes(32, "big")
+    return private_raw, _b64url(point)
+
+
+def _normalize_private(value: str) -> str:
+    """Wandelt einen PEM-Schlüssel (ältere Version) in das rohe Format um."""
+    if "-----BEGIN" not in value:
+        return value
+    key = serialization.load_pem_private_key(value.encode(), password=None)
+    return _b64url(key.private_numbers().private_value.to_bytes(32, "big"))
 
 
 def keys(session: Session) -> tuple[str, str]:
@@ -53,7 +63,11 @@ def keys(session: Session) -> tuple[str, str]:
     private_row = session.get(AppSetting, KEY_PRIVATE)
     public_row = session.get(AppSetting, KEY_PUBLIC)
     if private_row and public_row:
-        return private_row.value, public_row.value
+        normalized = _normalize_private(private_row.value)
+        if normalized != private_row.value:
+            private_row.value = normalized
+            session.commit()
+        return normalized, public_row.value
 
     private_pem, public_key = generate_keys()
     for key, value in ((KEY_PRIVATE, private_pem), (KEY_PUBLIC, public_key)):
@@ -126,8 +140,7 @@ def send(session: Session, title: str, body: str, url: str = "/") -> int:
         logger.info("Keine Push-Abonnements - keine Nachricht verschickt")
         return 0
 
-    private_pem, _ = keys(session)
-    claims = {"sub": contact(session)}
+    private_key, _ = keys(session)
     message = json.dumps({"title": title, "body": body, "url": url})
     delivered = 0
 
@@ -136,11 +149,14 @@ def send(session: Session, title: str, body: str, url: str = "/") -> int:
             "endpoint": row.endpoint,
             "keys": {"p256dh": row.p256dh, "auth": row.auth},
         }
+        # pywebpush trägt das "aud" (der Origin des Endpoints) in das Claims-Dict
+        # ein - deshalb braucht jedes Abonnement einen eigenen Satz.
+        claims = {"sub": contact(session)}
         try:
             webpush(
                 subscription_info=subscription,
                 data=message,
-                vapid_private_key=private_pem,
+                vapid_private_key=private_key,
                 vapid_claims=claims,
                 ttl=3600,
             )

@@ -29,6 +29,17 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 - Die Tabelle „Zählerstände“ auf der Verbrauchsseite war immer leer, weil sie
   die Rohzählerstände zeigte statt der tatsächlich gemessenen Intervalle.
+- **Der Grundpreis (10,21 €/Monat) fehlte in allen Auswertungen**: die Kosten-
+  berechnung nahm den zuletzt aktualisierten Vertrag – das ist oft der beendete
+  „Light“-Tarif, der keinen Grundpreis hat. Jetzt wird der aktive Vertrag
+  verwendet; der Grundpreis wird auch an Tagen ohne Verbrauchsdaten anteilig
+  berechnet, weil die Grundgebühr ja täglich läuft.
+- **Web-Push**: der VAPID-Schlüssel wurde als PEM gespeichert, pywebpush erwartet
+  ihn aber als base64url-Rohwert (oder als Datei) – jede Nachricht scheiterte mit
+  „Could not deserialize key data“. Außerdem trug pywebpush das `aud`-Claim des
+  ersten Abonnements in das gemeinsame Claims-Dict ein und schickte es auch an
+  das zweite → „aud claim … MUST include the origin“. Jetzt: eigener Schlüssel
+  je Abo, Zustellung an beide Geräte bestätigt.
 - **Veraltete Dateien im Browser/CDN-Cache**: der Service Worker lieferte die
   alte `app.js` aus seinem Cache aus, dadurch blieb eine veraltete
   Service-Worker-Registrierung aktiv und `navigator.serviceWorker.ready` löste

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from oenergy.config import Settings
-from oenergy.db.models import Agreement, DailyStat, Interval
+from oenergy.db.models import DailyStat, Interval
 from oenergy.services.pricing import PriceBook, PricePoint
 from oenergy.utils import days_in_month, local_day
 
@@ -35,15 +35,23 @@ def compute_costs(session: Session, settings: Settings) -> int:
     if meter_id is not None:
         interval_query = interval_query.where(Interval.meter_id == meter_id)
     intervals = list(session.scalars(interval_query))
-    if not intervals:
-        return 0
 
-    agreement = session.scalar(select(Agreement).order_by(Agreement.updated_at.desc()))
+    # der aktive Vertrag - nicht der zuletzt aktualisierte (das kann ein
+    # beendeter Tarif sein, der keinen Grundpreis hat)
+    from oenergy.services.account import primary_agreement
+
+    agreement = primary_agreement(session, settings)
     vat = float(agreement.vat_rate or 0.19) if agreement else 0.19
     gross_standing_ct = float(agreement.gross_monthly_standing_charge_ct or 0.0) if agreement else 0.0
 
-    start = intervals[0].slot_start
-    end = intervals[-1].slot_end + timedelta(days=1)
+    if intervals:
+        start = intervals[0].slot_start
+        end = intervals[-1].slot_end + timedelta(days=1)
+    else:
+        # keine Verbrauchsdaten - der Grundpreis wird trotzdem verteilt
+        known = list(session.scalars(select(DailyStat)))
+        start = min((stat.day for stat in known), default=date.today()) - timedelta(days=1)
+        end = date.today() + timedelta(days=1)
     book = PriceBook(session, start, end)
 
     per_day: dict[object, dict[str, float]] = {}
@@ -59,11 +67,25 @@ def compute_costs(session: Session, settings: Settings) -> int:
         if gross is not None:
             bucket["energy_cost"] += interval.kwh * gross
 
+    # Tage ohne Verbrauchsdaten bekommen den Grundpreis trotzdem anteilig -
+    # die Grundgebühr läuft ja täglich weiter.
+    known_days = {stat.day for stat in session.scalars(select(DailyStat))}
+    days = set(per_day) | known_days
+    if not days:
+        return 0
+
+    fallback_meter = intervals[0].meter_id if intervals else None
+    if fallback_meter is None:
+        from oenergy.db.models import Meter
+
+        fallback_meter = session.scalar(select(Meter.id).limit(1))
+
     updated = 0
-    for day, bucket in per_day.items():
+    for day in sorted(days):
+        bucket = per_day.get(day, {"kwh": 0.0, "energy_cost": 0.0, "slots": 0})
         stat = session.scalar(select(DailyStat).where(DailyStat.day == day))
         if stat is None:
-            stat = DailyStat(day=day, meter_id=intervals[0].meter_id)
+            stat = DailyStat(day=day, meter_id=fallback_meter or "unbekannt")
             session.add(stat)
         stat.kwh = bucket["kwh"]
         stat.energy_cost_cents = bucket["energy_cost"]

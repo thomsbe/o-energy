@@ -167,3 +167,58 @@ def test_price_book_composes_base_component_and_epex(session) -> None:
     # base component (17.35) + exchange price (6.00) = 23.35 ct/kWh netto
     assert round(price.net_ct_per_kwh or 0, 4) == 23.35
     assert round(price.gross_ct_per_kwh or 0, 4) == 27.7865
+
+
+def test_standing_charge_comes_from_the_active_agreement(session) -> None:
+    """Regressionstest: ein beendeter Vertrag darf den Grundpreis nicht liefern."""
+    from datetime import date
+
+    from oenergy.config import Settings
+    from oenergy.db.models import Account, Agreement, DailyStat, Meter
+
+    session.add(Account(number="A1"))
+    session.add(Meter(id="m1", account_number="A1"))
+    session.add(
+        Agreement(
+            id="aktiv",
+            account_number="A1",
+            product_code="ELECTRICITY_DYNAMIC",
+            is_active=True,
+            gross_monthly_standing_charge_ct=1021.26,
+            net_monthly_standing_charge_ct=858.2,
+            vat_rate=0.19,
+        )
+    )
+    session.add(
+        Agreement(
+            id="beendet",
+            account_number="A1",
+            product_code="ELECTRICITY_DYNAMIC_LIGHT",
+            is_active=False,
+            gross_monthly_standing_charge_ct=None,
+            updated_at=datetime(2026, 11, 15, 12, 0, 0),
+        )
+    )
+    today = date.today()
+    session.add(
+        DailyStat(
+            meter_id="m1",
+            day=today,
+            kwh=10.0,
+            energy_cost_cents=500.0,
+            received_slots=96,
+            expected_slots=96,
+            is_final=True,
+        )
+    )
+    session.commit()
+
+    from oenergy.services.costs import compute_costs
+
+    settings = Settings(db_url="sqlite:///:memory:", timezone="Europe/Berlin")
+    compute_costs(session, settings)
+
+    stat = session.query(DailyStat).filter(DailyStat.day == today).one()
+    # 1021,26 ct / 31 Tage = 32,94 ct
+    assert stat.standing_cost_cents > 30
+    assert stat.cost_cents == stat.energy_cost_cents + stat.standing_cost_cents
