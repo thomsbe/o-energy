@@ -1,0 +1,129 @@
+{% import "_macros.html" as m %}
+<div class="tiles" id="tiles"
+     hx-get="/partials/tiles"
+     hx-trigger="every 60s"
+     hx-swap="outerHTML">
+
+  <div class="card card-price">
+    <div class="card-head">
+      <span class="card-title">Aktueller Preis</span>
+      <span class="chip chip-live">live</span>
+    </div>
+    <div class="card-value">{{ prices.current.label }}</div>
+    <div class="card-sub">
+      {% if prices.current.valid_to %}
+        gültig bis {{ prices.current.valid_to.strftime('%H:%M') }} Uhr
+      {% else %}
+        <span class="muted">kein Preis hinterlegt</span>
+      {% endif %}
+    </div>
+    {% if prices.current.rates and prices.current.rates | length > 1 %}
+      <div class="card-components">
+        {% for rate in prices.current.rates %}
+          <span class="chip chip-muted" title="{{ rate.name }}">
+            {{ rate.name }}: {{ "%.2f"|format(rate.gross_ct or 0) }}
+          </span>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Nächster Preis</span></div>
+    <div class="card-value">{{ prices.next.label }}</div>
+    <div class="card-sub">
+      {% if prices.next.valid_from %}
+        ab {{ prices.next.valid_from.strftime('%d.%m. %H:%M') }} Uhr
+      {% else %}
+        <span class="muted">–</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">EPEX Spot</span></div>
+    <div class="card-value">
+      {% if prices.epex_ct is not none %}{{ "%.2f"|format(prices.epex_ct) }} ct/kWh{% else %}<span class="muted">–</span>{% endif %}
+    </div>
+    <div class="card-sub"><span class="muted">Börsenpreis DE</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Verbrauch heute</span>
+      {{ m.state_badge(consumption.today_state) }}
+    </div>
+    <div class="card-value">{{ m.kwh_pending(consumption.today_kwh, consumption.today_state) }}</div>
+    <div class="card-sub">
+      {% if consumption.today_state in ('awaiting', 'delayed') %}
+        Zählerdaten stehen noch aus
+      {% else %}
+        heute, laufend
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Verbrauch gestern</span>
+      {{ m.state_badge(consumption.yesterday_state) }}
+    </div>
+    <div class="card-value">{{ m.kwh_pending(consumption.yesterday_kwh, consumption.yesterday_state) }}</div>
+    <div class="card-sub">
+      {% if consumption.yesterday_final %}
+        abgeschlossen
+      {% elif consumption.yesterday_state == 'awaiting' %}
+        Lieferung erwartet ab {{ consumption.yesterday_delivery.strftime('%d.%m. %H:%M') }} Uhr
+      {% elif consumption.yesterday_state == 'delayed' %}
+        Lieferung überfällig - Nachholung läuft
+      {% else %}
+        Zählerdaten mit ~24 h Verzögerung
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Ø Verbrauch</span></div>
+    <div class="card-value">{{ m.kwh(consumption.avg_daily_kwh) }}</div>
+    <div class="card-sub"><span class="muted">7 Tage</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Kosten heute</span></div>
+    <div class="card-value">{{ m.eur(costs.today_cents) }}</div>
+    <div class="card-sub"><span class="muted">Energie + Grundpreis</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Kosten Monat</span></div>
+    <div class="card-value">{{ m.eur(costs.month_cents) }}</div>
+    <div class="card-sub">
+      <span class="muted">Prognose {{ m.eur(costs.forecast_month_cents) }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Ø Preis</span></div>
+    <div class="card-value">{{ "%.2f"|format(costs.avg_price_ct) }} ct/kWh</div>
+    <div class="card-sub"><span class="muted">laufender Monat</span></div>
+  </div>
+
+  <div class="card card-sync">
+    <div class="card-head"><span class="card-title">Datenstand</span></div>
+    <div class="card-value small">
+      {% if runs %}
+        {{ runs[0].started_at.strftime('%d.%m. %H:%M') }}
+      {% else %}
+        <span class="muted">noch kein Sync</span>
+      {% endif %}
+    </div>
+    <div class="card-sub">
+      {% if runs %}
+        <span class="badge badge-{{ 'final' if runs[0].status == 'ok' else 'delayed' }}">{{ runs[0].job }}: {{ runs[0].status }}</span>
+      {% else %}
+        <span class="muted">–</span>
+      {% endif %}
+    </div>
+  </div>
+
+</div>

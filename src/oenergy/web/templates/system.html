@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}System{% endblock %}
+{% block content %}
+
+<section class="section">
+  <div class="section-head">
+    <h1 class="page-title">System</h1>
+    <p class="page-sub">Sync-Läufe, Zeitplan und Konfiguration</p>
+  </div>
+
+  <div class="tiles tiles-static">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Zeitzone</span></div>
+      <div class="card-value small">{{ settings.timezone }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Preis-Intervall</span></div>
+      <div class="card-value small">{{ settings.poll_interval_minutes }} Minuten</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Slot-Größe</span></div>
+      <div class="card-value small">{{ settings.slot_minutes }} Minuten</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Backfill</span></div>
+      <div class="card-value small">{{ settings.readings_backfill_days }} Tage</div>
+      <div class="card-sub"><span class="muted">holt nachgelieferte Zählerdaten nach</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Zugangsdaten</span></div>
+      <div class="card-value small">
+        {% if has_credentials %}<span class="badge badge-final">konfiguriert</span>
+        {% else %}<span class="badge badge-delayed">fehlen</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Sync-Läufe</h2>
+    <div class="panel-actions">
+      {% for job in ['prices', 'readings', 'bills'] %}
+        <button class="btn" hx-post="/actions/sync?job={{ job }}" hx-target="#sync-status" hx-swap="innerHTML">
+          {{ job }} jetzt
+        </button>
+      {% endfor %}
+    </div>
+  </header>
+  <div id="sync-status">
+    {% include "partials/sync_status.html" %}
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Zugang</h2>
+    <span class="panel-sub">Token-Laufzeiten</span>
+  </header>
+  {% if token.logged_in %}
+    <table class="table table-compact">
+      <tbody>
+        <tr>
+          <td>Access-Token</td>
+          <td class="num">{{ token.access_expires_at }}</td>
+        </tr>
+        <tr>
+          <td>Refresh-Token ({{ token.refresh_kind or '–' }})</td>
+          <td class="num">
+            {{ token.refresh_expires_at }}
+            {% if token.refresh_days_left is not none %}
+              <span class="badge badge-{{ 'delayed' if token.needs_login else ('partial' if token.expires_soon else 'final') }}">
+                {% if token.needs_login %}
+                  abgelaufen - neu anmelden
+                {% elif token.expires_soon %}
+                  noch {{ token.refresh_days_left }} Tage
+                {% else %}
+                  noch {{ token.refresh_days_left }} Tage
+                {% endif %}
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% if token.needs_login %}
+      <p class="panel-sub" style="margin-top:10px">
+        Das Refresh-Token ist abgelaufen: einmal <code>oenergy login</code> ausführen
+        (E-Mail und Passwort müssen dafür in der .env stehen).
+      </p>
+    {% elif token.expires_soon %}
+      <p class="panel-sub" style="margin-top:10px">
+        Das Refresh-Token läuft in {{ token.refresh_days_left }} Tagen ab.
+        Ohne Passwort in der .env muss dann einmal <code>oenergy login</code> ausgeführt werden.
+      </p>
+    {% endif %}
+  {% else %}
+    <p class="muted">Noch nicht angemeldet - <code>oenergy login</code> ausführen.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Automatisches Nachholen (Backfill)</h2>
+    <span class="panel-sub">Zeitfenster, die bereits bei der API abgefragt wurden</span>
+  </header>
+  {% if backfill.windows %}
+    <table class="table table-compact">
+      <thead>
+        <tr><th>Zähler</th><th>Von</th><th>Bis</th><th>Abgefragt</th><th class="num">Werte</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for window in backfill.windows %}
+          <tr>
+            <td class="muted">{{ window.meter_id }}</td>
+            <td>{{ window.start.strftime('%d.%m. %H:%M') }}</td>
+            <td>{{ window.end.strftime('%d.%m. %H:%M') }}</td>
+            <td class="muted">{{ window.queried_at.strftime('%d.%m. %H:%M') }}</td>
+            <td class="num">{{ window.rows_found }}</td>
+            <td>
+              <span class="badge badge-{{ 'final' if window.rows_found else 'awaiting' }}">
+                {{ 'Daten' if window.rows_found else 'leer' }}
+              </span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Noch keine Abfragen protokoltiert.</p>
+  {% endif %}
+
+  {% if backfill.pending %}
+    <p class="panel-sub" style="margin-top:12px">
+      Offene Lücken (werden beim nächsten Sync abgefragt):
+      {% for item in backfill.pending %}
+        <span class="chip chip-muted">{{ item.start.strftime('%d.%m. %H:%M') }} – {{ item.end.strftime('%d.%m. %H:%M') }}</span>
+      {% endfor %}
+    </p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Konfiguration</h2>
+    <span class="panel-sub">aus .env</span>
+  </header>
+  <table class="table">
+    <tbody>
+      <tr><td>OCTOPUS_EMAIL</td><td class="num">{{ settings.octopus_email or '–' }}</td></tr>
+      <tr><td>OCTOPUS_PASSWORD</td><td class="num">{{ '••••••' if settings.octopus_password else '–' }}</td></tr>
+      <tr><td>API_URL</td><td class="num">{{ settings.api_url }}</td></tr>
+      <tr><td>DB_URL</td><td class="num">{{ settings.db_url }}</td></tr>
+      <tr><td>ACCOUNT_NUMBER</td><td class="num">{{ settings.account_number or '–' }}</td></tr>
+      <tr><td>MELO_NUMBER</td><td class="num">{{ settings.melo_number or '–' }}</td></tr>
+      <tr><td>METER_ID</td><td class="num">{{ settings.meter_id or '–' }}</td></tr>
+      <tr><td>ENERGY_UNIT</td><td class="num">{{ settings.energy_unit }}</td></tr>
+      <tr><td>READINGS_HISTORY_DAYS</td><td class="num">{{ settings.readings_history_days }}</td></tr>
+      <tr><td>READINGS_MAX_WINDOW_DAYS</td><td class="num">{{ settings.readings_max_window_days }}</td></tr>
+      <tr><td>GAP_RETRY_MINUTES</td><td class="num">{{ settings.gap_retry_minutes }}</td></tr>
+      <tr><td>SCHEDULER_ENABLED</td><td class="num">{{ settings.scheduler_enabled }}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

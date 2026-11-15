@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Verbrauch{% endblock %}
+{% block content %}
+
+<section class="section">
+  <div class="section-head">
+    <h1 class="page-title">Verbrauch</h1>
+    <p class="page-sub">
+      Zählerstände und Verbrauch. Die Werte des Zähleranbieters treffen mit rund
+      24 Stunden Verzögerung ein – typischerweise gegen 08:00 Uhr des Folgetages.
+    </p>
+  </div>
+
+  <div class="tiles tiles-static">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Heute</span>
+        {{ m.state_badge(consumption.today_state) }}
+      </div>
+      <div class="card-value">{{ m.kwh_pending(consumption.today_kwh, consumption.today_state) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Gestern</span>
+        {{ m.state_badge(consumption.yesterday_state) }}
+      </div>
+      <div class="card-value">{{ m.kwh_pending(consumption.yesterday_kwh, consumption.yesterday_state) }}</div>
+      <div class="card-sub">
+        {% if consumption.yesterday_final %}
+          vollständig
+        {% elif consumption.yesterday_state == 'awaiting' %}
+          Lieferung erwartet ab {{ consumption.yesterday_delivery.strftime('%d.%m. %H:%M') }} Uhr
+        {% elif consumption.yesterday_state == 'delayed' %}
+          Lieferung überfällig - Nachholung läuft
+        {% else %}
+          unvollständig - Zählerdaten mit ~24 h Verzögerung
+        {% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">7 Tage</span></div>
+      <div class="card-value">{{ m.kwh(consumption.last_7_kwh) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">30 Tage</span></div>
+      <div class="card-value">{{ m.kwh(consumption.last_30_kwh) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Ø je Tag</span></div>
+      <div class="card-value">{{ m.kwh(consumption.avg_daily_kwh) }}</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Verbrauchsprofil</h2>
+    <span class="panel-sub">15-Minunden-Slots der letzten 3 Tage</span>
+  </header>
+  <div class="chart-wrap chart-lg"><canvas id="chart-consumption"></canvas></div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Zählerstände</h2>
+    <span class="panel-sub">letzte {{ readings | length }} Rohdaten</span>
+  </header>
+  {% if readings %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Zeitpunkt</th>
+          <th class="num">Zählerstand</th>
+          <th>Register</th>
+          <th>Art</th>
+          <th>Herkunft</th>
+          <th>Eingang</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in readings %}
+          <tr>
+            <td>{{ row.read_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td class="num">{{ "%.3f"|format(row.value) }}</td>
+            <td class="muted">{{ row.obis or '–' }}</td>
+            <td>{{ row.type_of_read or '–' }}</td>
+            <td class="muted">{{ row.origin or '–' }}</td>
+            <td class="muted">{{ row.received_at.strftime('%d.%m. %H:%M') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Noch keine Zählerdaten synchronisiert.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

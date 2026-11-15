@@ -1,0 +1,351 @@
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from oenergy.config import get_settings
+from oenergy.db.base import get_database
+from oenergy.services.identity import format_identity
+
+
+def _configure_logging(verbose: bool) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    settings = get_settings()
+    uvicorn.run(
+        "oenergy.main:app",
+        host=args.host or settings.app_host,
+        port=args.port or settings.app_port,
+        reload=args.reload,
+        log_level="info",
+    )
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    from oenergy.services.sync import JOBS, run_all, run_job
+
+    database = get_database()
+    database.create_all()
+
+    if args.job and args.job != "all":
+        if args.job not in JOBS:
+            print(f"Unknown job '{args.job}'. Available: {', '.join(sorted(JOBS))}", file=sys.stderr)
+            return 2
+        run = run_job(args.job, database=database)
+        runs = [run]
+    else:
+        runs = run_all(database=database)
+
+    for run in runs:
+        state = "OK " if run.status == "ok" else "ERR"
+        print(f"[{state}] {run.job:<9} items={run.items:<6} {run.message or ''}")
+    return 0 if all(run.status == "ok" for run in runs) else 1
+
+
+def cmd_probe(args: argparse.Namespace) -> int:
+    """Dump the raw API answers - helps to find the right queries."""
+    from oenergy.api.client import KrakenClient
+    from oenergy.services.sync import dump_raw
+
+    settings = get_settings()
+    if not settings.has_credentials:
+        print(
+            "Keine Zugangsdaten konfiguriert.\n"
+            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
+            file=sys.stderr,
+        )
+        return 2
+
+    database = get_database()
+    database.create_all()
+    with KrakenClient(settings, database.session) as client:
+        payload = dump_raw(database.session(), client, settings, target=args.target)
+
+    output = Path(args.out) if args.out else Path("probe.json")
+    output.write_text(json.dumps(payload, indent=2, default=str))
+    print(f"Rohdaten geschrieben nach {output}")
+    for key, value in payload.items():
+        if isinstance(value, dict):
+            data = value.get("data") or {}
+            summary = ", ".join(
+                f"{key}: {len(value) if isinstance(value, list) else type(value).__name__}"
+                for key, value in data.items()
+            )
+            print(f"  {key:<18} {summary}")
+    return 0
+
+
+def _format_duration(moment: datetime | None, now: datetime | None = None) -> str:
+    if moment is None:
+        return "unbekannt"
+    now = now or datetime.utcnow()
+    delta = moment - now
+    seconds = int(delta.total_seconds())
+    if seconds <= 0:
+        return "abgelaufen"
+    if seconds < 3600:
+        return f"noch {seconds // 60} Minuten"
+    if seconds < 86400:
+        return f"noch {seconds // 3600} Stunden"
+    return f"noch {seconds // 86400} Tage"
+
+
+def cmd_login(args: argparse.Namespace) -> int:
+    """One time login - afterwards the password is no longer needed."""
+    from oenergy.api.client import KrakenClient
+
+    settings = get_settings()
+    if not settings.has_credentials:
+        print(
+            "Keine Zugangsdaten konfiguriert.\n"
+            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
+            file=sys.stderr,
+        )
+        return 2
+
+    database = get_database()
+    database.create_all()
+    with KrakenClient(settings, database.session) as client:
+        info = client.login()
+        identity = _load_identity(client=client, settings=settings, database=database)
+
+    print("Login erfolgreich.")
+    print(
+        f"  Access-Token  gültig bis {info['access_expires_at']} "
+        f"({_format_duration(info['access_expires_at'])})"
+    )
+    if info.get("has_refresh_token"):
+        print(
+            f"  Refresh-Token gültig bis {info['refresh_expires_at']} "
+            f"({_format_duration(info['refresh_expires_at'])})"
+        )
+        print(
+            "  → Das Passwort wird nicht mehr gebraucht: OCTOPUS_PASSWORD kann aus der .env entfernt werden."
+        )
+    else:
+        print("  → Kein Refresh-Token erhalten - das Passwort muss in der .env bleiben.")
+
+    if identity and identity.get("known"):
+        print()
+        print(format_identity(identity))
+    return 0
+
+
+def _load_identity(
+    client=None,
+    settings=None,
+    database=None,
+) -> dict:
+    """Identity from the database - optionally refreshed from the API."""
+    from oenergy.services.account import sync_account
+    from oenergy.services.identity import identity
+
+    database = database or get_database()
+    if client is not None and settings is not None:
+        with database.session() as db_session:
+            try:
+                sync_account(db_session, client, settings)
+            except Exception as exc:
+                print(f"Kontodaten konnten nicht geladen werden: {exc}", file=sys.stderr)
+            return identity(db_session)
+
+    with database.session() as db_session:
+        return identity(db_session)
+
+
+def cmd_token_info(args: argparse.Namespace) -> int:
+    """Show the lifetime of the stored tokens."""
+    from oenergy.api.client import KrakenClient
+
+    settings = get_settings()
+    database = get_database()
+    with KrakenClient(settings, database.session) as client:
+        info = client.token_info()
+
+    if not info.get("logged_in") and not info.get("has_refresh_token"):
+        print("Noch kein Login erfolgt - mit 'oenergy login' anmelden.")
+        return 1
+
+    print(f"Access-Token  : {'vorhanden' if info.get('logged_in') else '–'}")
+    print(
+        f"  gültig bis  : {info.get('access_expires_at')} ({_format_duration(info.get('access_expires_at'))})"
+    )
+    print(f"Refresh-Token : {'vorhanden' if info.get('has_refresh_token') else '–'}")
+    print(
+        f"  gültig bis  : {info.get('refresh_expires_at')} "
+        f"({_format_duration(info.get('refresh_expires_at'))})"
+    )
+    print(f"  Art         : {info.get('refresh_kind') or '–'}")
+    print(f"zuletzt aktualisiert: {info.get('updated_at')}")
+
+    identity = _load_identity()
+    if identity.get("known"):
+        print()
+        print(format_identity(identity))
+    else:
+        print()
+        print("Noch keine Kontodaten bekannt - mit 'oenergy login' oder 'oenergy sync account' nachladen.")
+    return 0
+
+
+def cmd_whoami(args: argparse.Namespace) -> int:
+    """Show the user and the account behind the stored token."""
+    settings = get_settings()
+    identity = _load_identity()
+    if not identity.get("known"):
+        print("Noch keine Kontodaten bekannt.")
+        if not settings.has_credentials:
+            print("Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD in der .env und führe 'oenergy login' aus.")
+        return 1
+    print(format_identity(identity))
+    return 0
+
+
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    """Prüft, welche Daten der Account tatsächlich liefert."""
+    from oenergy.api.client import KrakenClient
+    from oenergy.services.diagnose import diagnose, format_report
+
+    settings = get_settings()
+    if not settings.has_credentials:
+        print(
+            "Keine Zugangsdaten konfiguriert.\n"
+            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
+            file=sys.stderr,
+        )
+        return 2
+
+    database = get_database()
+    database.create_all()
+    with KrakenClient(settings, database.session) as client, database.session() as session:
+        report = diagnose(session, client, settings)
+
+    print(format_report(report))
+    if args.out:
+        output = Path(args.out)
+        output.write_text(json.dumps(report, indent=2, default=str))
+        print(f"\nRohdaten geschrieben nach {output}")
+
+    return 1 if report.get("errors") else 0
+
+
+def cmd_seed(args: argparse.Namespace) -> int:
+    from oenergy.services.demo import seed
+
+    settings = get_settings()
+    database = get_database()
+    database.create_all()
+    with database.session() as session:
+        result = seed(session, settings, days=args.days)
+    print(f"Demo-Daten erzeugt: {result}")
+    return 0
+
+
+def cmd_reset(args: argparse.Namespace) -> int:
+    """Leert alle Tabellen - z.B. um Demo-Daten vor dem echten Sync zu entfernen."""
+    from oenergy.db.models import Base
+
+    if not args.yes:
+        print("ACHTUNG: Alle Daten (Verbrauch, Preise, Kosten) werden gelöscht.")
+        print("Mit --yes bestätigen.")
+        return 2
+
+    database = get_database()
+    with database.session() as session:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        session.commit()
+    print("Datenbank geleert.")
+    return 0
+
+
+def cmd_init_db(args: argparse.Namespace) -> int:
+    database = get_database()
+    database.create_all()
+    print(f"Datenbank bereit: {database.url}")
+    return 0
+
+
+def cmd_jobs(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    print("Geplante Jobs:")
+    print(f"  prices    : alle {settings.poll_interval_minutes} Minuten")
+    print("  readings  : stündlich (Minute 7)")
+    print("  finalize  : täglich 08:17 (nach der Lieferung um ~08:00)")
+    print("  bills     : täglich 06:12")
+    print("  account   : alle 12 Stunden")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="oenergy", description="o-energy – Octopus Energy DE Dashboard")
+    parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    serve = sub.add_parser("serve", help="start the web application")
+    serve.add_argument("--host")
+    serve.add_argument("--port", type=int)
+    serve.add_argument("--reload", action="store_true")
+    serve.set_defaults(func=cmd_serve)
+
+    sync = sub.add_parser("sync", help="run the API synchronisation")
+    sync.add_argument("job", nargs="?", default="all", help="account|prices|readings|finalize|bills|all")
+    sync.set_defaults(func=cmd_sync)
+
+    probe = sub.add_parser("probe", help="dump the raw API answers")
+    probe.add_argument("--target", default="all", help="all|account|prices|readings")
+    probe.add_argument("--out", default=None)
+    probe.set_defaults(func=cmd_probe)
+
+    seed = sub.add_parser("seed", help="fill the database with demo data")
+    seed.add_argument("--days", type=int, default=30)
+    seed.set_defaults(func=cmd_seed)
+
+    login = sub.add_parser("login", help="log in once and store the tokens")
+    login.set_defaults(func=cmd_login)
+
+    token_info = sub.add_parser("token-info", help="show the lifetime of the stored tokens")
+    token_info.set_defaults(func=cmd_token_info)
+
+    whoami = sub.add_parser("whoami", help="show the user and account behind the stored token")
+    whoami.set_defaults(func=cmd_whoami)
+
+    diagnose = sub.add_parser("diagnose", help="check which data the account delivers")
+    diagnose.add_argument("--out", default=None, help="write the report as JSON")
+    diagnose.set_defaults(func=cmd_diagnose)
+
+    init_db = sub.add_parser("init-db", help="create the database schema")
+    init_db.set_defaults(func=cmd_init_db)
+
+    reset = sub.add_parser("reset", help="delete all data (e.g. demo data)")
+    reset.add_argument("--yes", action="store_true", help="bestätigen")
+    reset.set_defaults(func=cmd_reset)
+
+    jobs = sub.add_parser("jobs", help="show the job schedule")
+    jobs.set_defaults(func=cmd_jobs)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    _configure_logging(args.verbose)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}o-energy{% endblock %} · Octopus Energy</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐙</text></svg>">
+  <script src="{{ url_for('static', path='/vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', path='/vendor/chart.umd.js') }}" defer></script>
+  <script src="{{ url_for('static', path='/js/app.js') }}" defer></script>
+  <script>
+    (function () {
+      var stored = localStorage.getItem('oenergy-theme');
+      if (stored) { document.documentElement.setAttribute('data-theme', stored); }
+    })();
+  </script>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark">🐙</span>
+      <span class="brand-text">o-energy</span>
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link {% if active == 'dashboard' %}is-active{% endif %}">Dashboard</a>
+      <a href="/verbrauch" class="nav-link {% if active == 'consumption' %}is-active{% endif %}">Verbrauch</a>
+      <a href="/preise" class="nav-link {% if active == 'prices' %}is-active{% endif %}">Preise</a>
+      <a href="/kosten" class="nav-link {% if active == 'costs' %}is-active{% endif %}">Kosten</a>
+      <a href="/system" class="nav-link {% if active == 'system' %}is-active{% endif %}">System</a>
+    </nav>
+    <div class="topbar-right">
+      {% if agreement %}
+      <span class="chip chip-muted" title="Tarif">{{ agreement.product or 'Tarif unbekannt' }}</span>
+      {% endif %}
+      <button class="icon-btn" id="theme-toggle" type="button" title="Hell/Dunkel umschalten">◐</button>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  <span>o-energy · Octopus Energy Germany (Kraken API)</span>
+  <span>Stand: {{ now.strftime('%d.%m.%Y %H:%M') if now else '-' }} MESZ</span>
+</footer>
+</body>
+</html>

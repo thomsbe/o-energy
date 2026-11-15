@@ -1,0 +1,32 @@
+{% macro state_badge(state, is_final=false) -%}
+  {%- if state == 'final' -%}
+    <span class="badge badge-final" title="Daten sind vollständig">final</span>
+  {%- elif state == 'partial' -%}
+    <span class="badge badge-partial" title="Daten sind unvollständig – der Zähleranbieter liefert mit ~24 h Verzögerung">provisorisch</span>
+  {%- elif state == 'delayed' -%}
+    <span class="badge badge-delayed" title="Lieferung überfällig – es liegen noch keine Daten vor">warten</span>
+  {%- else -%}
+    <span class="badge badge-awaiting" title="Lieferung für diesen Tag steht noch aus (erwartet ca. 08:00 Uhr des Folgetages)">ausstehend</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro eur(cents, digits=2) -%}
+  {%- if cents is none -%}
+    <span class="muted">–</span>
+  {%- else -%}
+    {{ "{:,.{d}f}".format((cents or 0) / 100, d=digits) }} €
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro kwh(value, digits=2) -%}
+  {{ "{:,.{d}f}".format(value or 0, d=digits) }} kWh
+{%- endmacro %}
+
+{#- Für Tage ohne Zählerdaten keinen Verbrauch vortäuschen (24-h-Lieferverzug) -#}
+{% macro kwh_pending(value, state, digits=2) -%}
+  {%- if state in ('awaiting', 'delayed') and not value -%}
+    <span class="muted">– kWh</span>
+  {%- else -%}
+    {{ "{:,.{d}f}".format(value or 0, d=digits) }} kWh
+  {%- endif -%}
+{%- endmacro %}

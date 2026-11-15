@@ -1,0 +1,25 @@
+{% if runs %}
+  <table class="table table-compact">
+    <thead>
+      <tr><th>Job</th><th>Start</th><th>Ende</th><th class="num">Einträge</th><th>Status</th><th>Meldung</th></tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+        <tr>
+          <td>{{ run.job }}</td>
+          <td>{{ run.started_at.strftime('%d.%m. %H:%M:%S') }}</td>
+          <td class="muted">{{ run.finished_at.strftime('%H:%M:%S') if run.finished_at else '–' }}</td>
+          <td class="num">{{ run.items }}</td>
+          <td>
+            <span class="badge badge-{{ 'final' if run.status == 'ok' else ('awaiting' if run.status == 'running' else 'delayed') }}">
+              {{ run.status }}
+            </span>
+          </td>
+          <td class="muted">{{ (run.message or '')[:120] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="muted">Noch keine Sync-Läufe.</p>
+{% endif %}

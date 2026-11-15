@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Kosten{% endblock %}
+{% block content %}
+
+<section class="section">
+  <div class="section-head">
+    <h1 class="page-title">Kosten</h1>
+    <p class="page-sub">
+      Berechnet aus Verbrauch × Zeitpreis plus monatlichem Grundpreis
+      {% if agreement and agreement.standing_charge_ct %}
+        ({{ "%.2f"|format(agreement.standing_charge_ct) }} ct/Monat)
+      {% endif %}.
+    </p>
+  </div>
+
+  <div class="tiles tiles-static">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Heute</span></div>
+      <div class="card-value">{{ m.eur(costs.today_cents) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Laufender Monat</span></div>
+      <div class="card-value">{{ m.eur(costs.month_cents) }}</div>
+      <div class="card-sub"><span class="muted">Tag {{ costs.days_elapsed }} von {{ costs.days_in_month }}</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Prognose Monat</span></div>
+      <div class="card-value">{{ m.eur(costs.forecast_month_cents) }}</div>
+      <div class="card-sub"><span class="muted">auf Basis der bisherigen Tage</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Laufendes Jahr</span></div>
+      <div class="card-value">{{ m.eur(costs.year_cents) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Ø Preis</span></div>
+      <div class="card-value">{{ "%.2f"|format(costs.avg_price_ct) }} ct/kWh</div>
+      <div class="card-sub"><span class="muted">inkl. Grundpreis</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Kosten pro Tag</h2>
+    <span class="panel-sub">Energiekosten und Grundpreis</span>
+  </header>
+  <div class="chart-wrap chart-lg"><canvas id="chart-costs"></canvas></div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Rechnungen</h2>
+    <span class="panel-sub">Ist-Kosten aus dem Kundenkonto</span>
+  </header>
+  {% if bills %}
+    <table class="table">
+      <thead>
+        <tr><th>Zeitraum</th><th>Rechnung</th><th class="num">Betrag</th></tr>
+      </thead>
+      <tbody>
+        {% for bill in bills %}
+          <tr>
+            <td>
+              {{ bill.period_start.strftime('%d.%m.%Y') if bill.period_start else '–' }}
+              – {{ bill.period_end.strftime('%d.%m.%Y') if bill.period_end else '–' }}
+            </td>
+            <td class="muted">{{ bill.id }}</td>
+            <td class="num">{{ m.eur(bill.total_cents) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Noch keine Rechnungen synchronisiert.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

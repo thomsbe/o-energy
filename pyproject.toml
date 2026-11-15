@@ -1,0 +1,51 @@
+[project]
+name = "o-energy"
+version = "0.1.0"
+description = "Self-hosted dashboard for Octopus Energy Germany (Kraken GraphQL API)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14",
+    "apscheduler>=3.11",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "jinja2>=3.1",
+    "pydantic-settings>=2.7",
+    "sqlalchemy>=2.0",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.scripts]
+oenergy = "oenergy.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "respx>=0.22",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "oenergy"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # deutsche Typografie (– etc.) ist gewollt
+
+[tool.ruff.lint.per-file-ignores]
+"src/oenergy/web/routes.py" = ["B008"]  # FastAPI braucht Depends() im Default
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning"]

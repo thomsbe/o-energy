@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Preise{% endblock %}
+{% block content %}
+
+<section class="section">
+  <div class="section-head">
+    <h1 class="page-title">Preise</h1>
+    <p class="page-sub">
+      Kundenpreis und Börsenpreis (EPEX SPOT) im Vergleich.
+      <a class="link" href="/api/export/prices.csv">CSV exportieren</a>
+    </p>
+  </div>
+
+  <div class="tiles tiles-static">
+    <div class="card card-price">
+      <div class="card-head"><span class="card-title">Aktuell</span></div>
+      <div class="card-value">{{ prices.current.label }}</div>
+      <div class="card-sub">
+        {% if prices.current.valid_to %}gültig bis {{ prices.current.valid_to.strftime('%H:%M') }} Uhr{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Nächster Preis</span></div>
+      <div class="card-value">{{ prices.next.label }}</div>
+      <div class="card-sub">
+        {% if prices.next.valid_from %}ab {{ prices.next.valid_from.strftime('%d.%m. %H:%M') }} Uhr{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">EPEX Spot</span></div>
+      <div class="card-value">
+        {% if prices.epex_ct is not none %}{{ "%.2f"|format(prices.epex_ct) }} ct/kWh{% else %}<span class="muted">–</span>{% endif %}
+      </div>
+      <div class="card-sub"><span class="muted">Börsenpreis DE</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Preisverlauf</h2>
+    <span class="panel-sub">48 Stunden</span>
+  </header>
+  <div class="chart-wrap chart-lg"><canvas id="chart-prices"></canvas></div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Preis-Matrix</h2>
+    <span class="panel-sub">Preis je 15-Minuten-Slot der letzten 7 Tage</span>
+  </header>
+  <div class="heatmap">
+    {% if heatmap.matrix %}
+      <div class="heatmap-hours">
+        {% for hour in range(0, 24) %}
+          <span>{{ "%02d"|format(hour) }}</span>
+        {% endfor %}
+      </div>
+      {% for row in heatmap.matrix %}
+        <div class="heatmap-row">
+          <span class="heatmap-label">{{ heatmap.labels[loop.index0][5:] }}</span>
+          <div class="heatmap-cells">
+            {% for cell in row %}
+              <span class="heatmap-cell {% if cell is none %}is-empty{% endif %}"
+                    {% if cell is not none %}style="--v: {{ (cell / 45) if cell else 0 }}"{% endif %}
+                    title="{% if cell is not none %}{{ "%.2f"|format(cell) }} ct/kWh{% else %}keine Daten{% endif %}"></span>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">Noch keine Preise synchronisiert.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Kommende Preise</h2>
+    <span class="panel-sub">nächste Slots</span>
+  </header>
+  {% if prices.upcoming %}
+    <table class="table">
+      <thead>
+        <tr><th>Von</th><th>Bis</th><th class="num">netto</th><th class="num">brutto</th></tr>
+      </thead>
+      <tbody>
+        {% for row in prices.upcoming %}
+          <tr>
+            <td>{{ row.starts_at.strftime('%d.%m. %H:%M') }}</td>
+            <td>{{ row.ends_at.strftime('%H:%M') }}</td>
+            <td class="num">{{ "%.4f"|format(row.net_ct or 0) }}</td>
+            <td class="num">{{ "%.4f"|format(row.gross_ct or 0) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Noch keine Preise synchronisiert.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

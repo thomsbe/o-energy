@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+{% if not agreement %}
+<section class="panel panel-hint">
+  <h2>Noch keine Daten</h2>
+  <p>
+    Trage die Zugangsdaten in der <code>.env</code> ein und starte einmalig
+    <code>uv run oenergy sync all</code> (oder <code>docker compose exec oenergy oenergy sync all</code>).
+    Mit <code>uv run oenergy diagnose</code> siehst du, welche Daten der Account liefert.
+  </p>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="section-head">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-sub">
+      {% if agreement %}
+        {{ agreement.product }}{% if agreement.is_time_of_use %} · dynamischer Tarif (15-Minuten-Preise){% endif %}
+      {% else %}
+        Tarif noch nicht synchronisiert
+      {% endif %}
+    </p>
+  </div>
+  {% include "partials/tiles.html" %}
+</section>
+
+<section class="grid-2">
+  <div class="panel">
+    <header class="panel-head">
+      <h2>Preisverlauf</h2>
+      <span class="panel-sub">Kundenpreis (brutto) und EPEX-Spotpreis</span>
+    </header>
+    <div class="chart-wrap chart-lg"><canvas id="chart-prices"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <header class="panel-head">
+      <h2>Verbrauchsprofil</h2>
+      <span class="panel-sub">15-Minuten-Werte, letzte {{ heatmap.days | default(3) }} Tage</span>
+    </header>
+    <div class="chart-wrap chart-lg"><canvas id="chart-consumption"></canvas></div>
+  </div>
+</section>
+
+<section class="grid-2">
+  <div class="panel">
+    <header class="panel-head">
+      <h2>Kosten pro Tag</h2>
+      <span class="panel-sub">Energiekosten + Grundpreis, letzte 30 Tage</span>
+    </header>
+    <div class="chart-wrap"><canvas id="chart-costs"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <header class="panel-head">
+      <h2>Preis-Matrix</h2>
+      <span class="panel-sub">Preis je 15-Minuten-Slot (hell = günstig)</span>
+    </header>
+    <div class="heatmap">
+      {% if heatmap.matrix %}
+        <div class="heatmap-hours">
+          {% for hour in range(0, 24) %}
+            <span>{{ "%02d"|format(hour) }}</span>
+          {% endfor %}
+        </div>
+        {% for row in heatmap.matrix %}
+          <div class="heatmap-row">
+            <span class="heatmap-label">{{ heatmap.labels[loop.index0][5:] }}</span>
+            <div class="heatmap-cells">
+              {% for cell in row %}
+                <span class="heatmap-cell {% if cell is none %}is-empty{% endif %}"
+                      {% if cell is not none %}style="--v: {{ (cell / 45) if cell else 0 }}"{% endif %}
+                      title="{% if cell is not none %}{{ "%.2f"|format(cell) }} ct/kWh{% else %}keine Daten{% endif %}"></span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Noch keine Preise synchronisiert.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Günstigste Zeitfenster (next 24 h)</h2>
+    <span class="panel-sub">Zum Planen von Laden und Waschen</span>
+  </header>
+  {% if cheapest %}
+    <table class="table">
+      <thead>
+        <tr><th>Zeitfenster</th><th class="num">Preis</th><th class="num">EPEX</th></tr>
+      </thead>
+      <tbody>
+        {% for item in cheapest %}
+          <tr>
+            <td>{{ item.start.strftime('%d.%m. %H:%M') }} – {{ item.end.strftime('%H:%M') }}</td>
+            <td class="num">{{ "%.2f"|format(item.gross or 0) }} ct/kWh</td>
+            <td class="num muted">{{ "%.2f"|format(item.epex or 0) }} ct/kWh</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Noch keine Preise synchronisiert.</p>
+  {% endif %}
+</section>
+
+{% endblock %}
