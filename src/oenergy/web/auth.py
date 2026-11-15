@@ -26,8 +26,9 @@ from oenergy.config import Settings
 
 password_hash = PasswordHash.recommended()
 
-#: Diese Pfade sind ohne Anmeldung erreichbar
-PUBLIC_PATHS = ("/login", "/api/health", "/favicon.ico")
+#: Diese Pfade sind ohne Anmeldung erreichbar - der Service Worker muss
+#: öffentlich sein, weil der Browser ihn ohne Sitzung lädt.
+PUBLIC_PATHS = ("/login", "/api/health", "/favicon.ico", "/sw.js")
 
 #: Die Passkey-Anmeldung muss ohne Session funktionieren - sonst liefert die
 #: Middleware eine Umleitung auf das Login-Formular statt JSON.
@@ -105,12 +106,14 @@ class RequireLoginMiddleware:
 
         # lokale Zugriffe (Tests, curl auf localhost) ohne Anmeldung
         if self.settings.auth_local_bypass and is_local_request(scope, headers.get("host")):
+            scope["oenergy_auth"] = {"user": self.settings.auth_username}
             await self.app(scope, receive, send)
             return
 
         # optionales Secret-Header für Skripte
         token = self.settings.auth_bypass_token
         if token and headers.get("x-oenergy-token") == token:
+            scope["oenergy_auth"] = {"user": self.settings.auth_username}
             await self.app(scope, receive, send)
             return
 
@@ -169,6 +172,10 @@ def logout(request: Request) -> None:
 
 
 def current_user(request: Request) -> str | None:
+    """Der angemeldete Benutzer - auch bei einem Bypass (lokal/Secret-Header)."""
+    bypass = (getattr(request, "scope", None) or {}).get("oenergy_auth")
+    if bypass:
+        return bypass.get("user")
     return (request.session or {}).get("user")
 
 

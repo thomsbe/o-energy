@@ -233,6 +233,15 @@ def test_bypass_token_header(client, monkeypatch) -> None:
     )
     assert response.status_code == 200
 
+    # auch die API-Endpunkte sind mit dem Token erreichbar
+    response = client.get(
+        "/api/push/key",
+        headers={"Host": "strom.tbaer.de", "X-OEnergy-Token": "geheim-token"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 200
+    assert response.json()["key"]
+
     # ohne das Header (oder mit dem falschen) wird umgeleitet
     response = client.get("/kosten", headers={"Host": "strom.tbaer.de"}, follow_redirects=False)
     assert response.status_code == 303

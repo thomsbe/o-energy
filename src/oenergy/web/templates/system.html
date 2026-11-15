@@ -477,8 +477,6 @@
     load();
   })();
 </script>
-{% endblock %}
-
 <script>
   (function () {
     var list = document.getElementById("push-list");
@@ -486,6 +484,13 @@
     var testButton = document.getElementById("push-test");
     var status = document.getElementById("push-status");
     if (!list || !enableButton) { return; }
+
+    function withTimeout(promise, ms) {
+      return Promise.race([
+        promise,
+        new Promise(function (resolve) { setTimeout(function () { resolve(null); }, ms); }),
+      ]);
+    }
 
     function urlBase64ToUint8Array(base64String) {
       var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -531,7 +536,8 @@
           status.textContent = "Berechtigung nicht erteilt.";
           return;
         }
-        var registration = await navigator.serviceWorker.ready;
+        var registration = await withTimeout(navigator.serviceWorker.ready, 8000);
+        if (!registration) { throw new Error("Service Worker nicht bereit - Seite einmal neu laden"); }
         var keyResponse = await fetch("/api/push/key");
         var keyData = await keyResponse.json();
         if (!keyResponse.ok) { throw new Error(keyData.error || "kein Schlüssel"); }
@@ -570,3 +576,5 @@
     load();
   })();
 </script>
+
+{% endblock %}

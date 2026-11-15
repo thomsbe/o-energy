@@ -60,6 +60,21 @@ def _tz():
     return ZoneInfo(get_settings().timezone)
 
 
+@router.get("/sw.js")
+def service_worker() -> Response:
+    """Der Service Worker muss aus dem Root kommen, sonst ist sein
+    Geltungsbereich auf /static/ begrenzt."""
+    from fastapi.responses import FileResponse
+
+    from oenergy.web.routes import STATIC_DIR
+
+    return FileResponse(
+        STATIC_DIR / "sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
+
 @router.get("/login", response_class=HTMLResponse)
 def page_login(request: Request) -> HTMLResponse:
     settings = get_settings()

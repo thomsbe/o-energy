@@ -253,6 +253,17 @@ mit einem gelben Hinweis darauf hin. **Für einen Betrieb im Internet
 Verbrauchsdaten, Konto- und Zählernummer sowie die Adresse für jeden erreichbar,
 der die URL kennt.
 
+### Benachrichtigungen (Web Push)
+
+Auf der Seite *System* lässt sich eine Push-Benachrichtigung aktivieren. Meldet
+der Netzbetreiber die Daten des Vortages, schickt die App eine Nachricht an das
+Telefon („Neue Daten vom 14.11.: 8,5 kWh für 4,40 €“). Der Button *Testnachricht
+senden* prüft die Einrichtung.
+
+Voraussetzung ist ein **sicherer Kontext** – also `https://` (der Tunnel) oder
+`localhost`. Auf iOS müssen die Mitteilungen für die zum Home-Bildschirm
+hinzugefügte App in den iOS-Einstellungen erlaubt werden.
+
 ### Zugriff ohne Anmeldung (für Tests)
 
 ```bash

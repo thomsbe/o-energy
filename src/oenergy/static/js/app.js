@@ -32,7 +32,7 @@
   // ------------------------------------------------------- Service Worker
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) { return; }
-    navigator.serviceWorker.register("/static/sw.js").catch(function () {
+    navigator.serviceWorker.register("/sw.js").catch(function () {
       /* offline-Fähigkeit ist optional */
     });
   }
