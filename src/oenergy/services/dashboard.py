@@ -166,13 +166,29 @@ def cost_summary(session: Session, settings: Settings) -> dict:
     year_cents = sum(stat.cost_cents for stat in stats if stat.day >= year_start)
 
     month_kwh = sum(stat.kwh for stat in stats if stat.day >= month_start)
-    month_days = (today - month_start).days + 1
     days_in_month = _days_in_month(today)
-    forecast_cents = 0.0
-    daily_avg = (month_cents / month_days) if month_days else 0.0
-    for offset in range(month_days, days_in_month + 1):
-        stat = stats_by_day.get(today.replace(day=offset))
-        forecast_cents += stat.cost_cents if stat else daily_avg
+
+    # --- Monatsprognose -------------------------------------------------
+    # Die bereits angefallenen Kosten plus die noch erwarteten Tage.
+    # Als Basis dienen die letzten Tage mit Daten (repräsentativer als der
+    # Monatsschnitt, weil sich die Preise laufend ändern).
+    month_stats = sorted(
+        (stat for stat in stats if month_start <= stat.day < today),
+        key=lambda stat: stat.day,
+    )
+    recent = month_stats[-FORECAST_BASIS_DAYS:]
+    daily_costs = [stat.cost_cents for stat in recent]
+    daily_avg = sum(daily_costs) / len(daily_costs) if daily_costs else 0.0
+    daily_spread = 0.0
+    if len(daily_costs) > 1:
+        mean = daily_avg
+        daily_spread = (sum((value - mean) ** 2 for value in daily_costs) / len(daily_costs)) ** 0.5
+
+    # noch offene Tage (heute zählt mit - die Daten kommen erst morgen früh)
+    remaining_days = max(0, days_in_month - len(month_stats))
+    forecast_cents = month_cents + remaining_days * daily_avg
+    # die Unsicherheit sinkt mit der Wurzel aus der Zahl der offenen Tage
+    uncertainty_cents = daily_spread * (remaining_days**0.5) if remaining_days else 0.0
 
     return {
         "today_cents": today_cents,
@@ -182,8 +198,12 @@ def cost_summary(session: Session, settings: Settings) -> dict:
         "month_kwh": month_kwh,
         "avg_price_ct": (month_cents / month_kwh) if month_kwh else 0.0,
         "forecast_month_cents": forecast_cents,
+        "forecast_uncertainty_cents": uncertainty_cents,
+        "daily_avg_cents": daily_avg,
+        "remaining_days": remaining_days,
+        "basis_days": len(daily_costs),
         "days_in_month": days_in_month,
-        "days_elapsed": month_days,
+        "days_elapsed": len(month_stats),
     }
 
 
@@ -367,6 +387,9 @@ def cost_chart_data(session: Session, settings: Settings, days: int = 30) -> dic
         "is_final": [bool(stat.is_final) for stat in stats],
     }
 
+
+#: Anzahl der Tage, die als Basis für die Monatsprognose dienen
+FORECAST_BASIS_DAYS = 7
 
 #: Vorgabe-Schwellen für die Einordnung (brutto, ct/kWh) - überschreibbar
 #: über die Konfiguration (PRICE_CHEAP_LIMIT / PRICE_EXPENSIVE_LIMIT)

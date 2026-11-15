@@ -49,3 +49,46 @@ def test_hue_scale_runs_from_green_to_red() -> None:
     # die Verlaufskurve ist monoton
     values = [price_hue(v) for v in range(5, 80, 5)]
     assert values == sorted(values, reverse=True)
+
+
+def test_month_forecast_combines_known_costs_with_the_remaining_days(session) -> None:
+    from datetime import date, timedelta
+
+    from oenergy.db.models import DailyStat, Meter
+
+    session.add(Meter(id="m"))
+    today = date.today()
+    month_start = today.replace(day=1)
+    for offset in range(10):
+        day = month_start + timedelta(days=offset)
+        session.add(
+            DailyStat(
+                meter_id="m",
+                day=day,
+                kwh=8.0,
+                cost_cents=400.0,
+                energy_cost_cents=380.0,
+                standing_cost_cents=20.0,
+                received_slots=96,
+                expected_slots=96,
+                is_final=True,
+            )
+        )
+    session.commit()
+
+    from oenergy.config import Settings
+    from oenergy.services.dashboard import cost_summary
+
+    settings = Settings(db_url="sqlite:///:memory:", timezone="Europe/Berlin")
+    summary = cost_summary(session, settings)
+
+    assert summary["month_cents"] == 4000.0
+    assert summary["basis_days"] == 7  # die letzten 7 Tage sind die Basis
+    assert summary["daily_avg_cents"] == 400.0
+    assert summary["remaining_days"] > 0
+    # Prognose = bereits angefallen + offene Tage × Tagesschnitt
+    assert summary["forecast_month_cents"] == (
+        summary["month_cents"] + summary["remaining_days"] * summary["daily_avg_cents"]
+    )
+    # bei gleichmäßigen Tageskosten ist die Unsicherheit 0
+    assert summary["forecast_uncertainty_cents"] == 0.0

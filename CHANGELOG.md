@@ -121,6 +121,15 @@ HTMX-Web-Oberfläche.
 - Das Backup-Skript erstellt jetzt zusätzlich zum SQLite-Backup einen
   JSON-Export und behält die 10 neuesten Sicherungen.
 
+### Behoben
+
+- Die Monatsprognose war fehlerhaft: sie zählte die bereits angefallenen Kosten
+  nicht mit und doppelte den heutigen Tag. Jetzt ist sie die erwarteten
+  **Gesamtkosten des Monats** (bereits angefallen + offene Tage × Tagesschnitt
+  der letzten 7 Tage) – mit Angabe der Unsicherheit (± Standardabweichung je Tag
+  × Wurzel aus der Zahl der offenen Tage). Die Unsicherheit sinkt also, je näher
+  das Monatsende rückt.
+
 ### Lizenz
 
 - Das Projekt steht unter der **MIT-Lizenz** (`LICENSE`, `project.license = "MIT"`).

@@ -148,7 +148,10 @@ def status_overview(session: Session, limit: int = 20) -> dict:
     latest: dict[str, SyncRun] = {}
     for run in runs:
         latest.setdefault(run.job, run)
+    # der letzte erfolgreiche Lauf wird auch in älteren Läufen gesucht
     success = next((run for run in runs if run.status == "ok"), None)
+    if success is None:
+        success = next((run for run in latest_runs(session, 200) if run.status == "ok"), None)
     return {
         "last_success": success,
         "jobs": latest,

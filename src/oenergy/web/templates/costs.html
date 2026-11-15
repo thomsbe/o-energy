@@ -22,12 +22,27 @@
     <div class="card">
       <div class="card-head"><span class="card-title">Laufender Monat</span></div>
       <div class="card-value">{{ m.eur(costs.month_cents) }}</div>
-      <div class="card-sub"><span class="muted">Tag {{ costs.days_elapsed }} von {{ costs.days_in_month }}</span></div>
+      <div class="card-sub">
+        <span class="muted">
+          {{ costs.days_elapsed }} von {{ costs.days_in_month }} Tagen mit Daten
+        </span>
+      </div>
     </div>
     <div class="card">
       <div class="card-head"><span class="card-title">Prognose Monat</span></div>
       <div class="card-value">{{ m.eur(costs.forecast_month_cents) }}</div>
-      <div class="card-sub"><span class="muted">auf Basis der bisherigen Tage</span></div>
+      <div class="card-sub">
+        {% if costs.forecast_uncertainty_cents %}
+          ± {{ m.eur(costs.forecast_uncertainty_cents) }}
+          <span class="muted">Unsicherheit</span>
+        {% endif %}
+      </div>
+      <div class="card-sub">
+        <span class="muted">
+          {{ costs.remaining_days }} offene Tage × Ø {{ m.eur(costs.daily_avg_cents) }}
+          (Basis: {{ costs.basis_days }} Tage)
+        </span>
+      </div>
     </div>
     <div class="card">
       <div class="card-head"><span class="card-title">Laufendes Jahr</span></div>
