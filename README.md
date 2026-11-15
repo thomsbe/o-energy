@@ -300,6 +300,21 @@ Die Umsetzung nutzt `py_webauthn` (WebAuthn/FIDO2) ohne Cloudflare-Zwang.
 > keine Passkeys an; dort bleibt nur das Passwort. Mit dem Cloudflare-Tunnel
 > (`https://…`) funktionieren die Passkeys.
 
+## Wann kommen die Daten?
+
+Der Netzbetreiber liefert die Zählerdaten des Vortags **gegen 08:00 Uhr** – aber
+nicht garantiert pünktlich. Die App ist darauf eingerichtet:
+
+| Zeitpunkt | Was passiert |
+|---|---|
+| vor 08:00 | Der Tag steht auf *warten* (`awaiting`) |
+| ab 08:00 | Der stündliche Job holt die Daten, sobald sie da sind (Sperrfenster 30 Minuten) |
+| 08:17 | Der *Tagesabschluss* holt die Daten selbst ab, rechnet Kosten und Tagesstatus neu und schickt die Push-Nachricht |
+| 10:00 | Spätestens jetzt wird ein Tag auch ohne vollständige Daten als endgültig markiert (2 Stunden Toleranz) |
+
+Kommt die Lieferung erst um 11 Uhr, tauchen die Daten beim nächsten stündlichen
+Lauf (11:07) auf und werden dann endgültig markiert.
+
 ## Jobs
 
 | Job | Rhythmus | Aufgabe |

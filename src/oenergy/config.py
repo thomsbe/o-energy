@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     readings_history_max_days: int = 0  # 0 = so weit zurück wie Daten vorhanden sind
     readings_history_chunk_days: int = 30  # wie weit ein Lauf zurückgreift
     readings_max_window_days: int = 7
-    gap_retry_minutes: int = 60
+    gap_retry_minutes: int = 30  # wie lange ein Fenster nach einer Abfrage gesperrt bleibt
     price_backfill_hours: int = 72
     slot_minutes: int = 15
     slot_expected_tolerance: float = 0.9

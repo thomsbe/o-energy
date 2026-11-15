@@ -78,12 +78,34 @@ def job_readings(session: Session, client: KrakenClient, settings: Settings) -> 
 
 
 def job_finalize(session: Session, client: KrakenClient, settings: Settings) -> int:
-    """Re-run the daily aggregation - used after the 08:00 delivery window."""
+    """Tagesabschluss - läuft nach dem Lieferfenster (08:00 Uhr).
+
+    Die Lieferung des Netzbetreibers kommt nicht immer pünktlich. Deshalb
+    holt der Job die Daten selbst ab (und wartet nicht auf den stündlichen
+    Job), rechnet danach die Kosten und den Tagesstatus neu und meldet
+    neu abgeschlossene Tage ans Telefon.
+    """
+    before = _final_days(session)
+
+    # die frisch gelieferten Werte abholen
+    try:
+        consumption.sync_readings(session, client, settings)
+    except Exception as exc:
+        logger.warning("Zählerdaten beim Tagesabschluss nicht abrufbar: {}", exc)
+
     # die Börsenpreise für die Historie nachladen, damit die vergangenen
     # Kundenpreise (Börsenpreis + Basiskomponente) berechenbar bleiben
     prices.sync_prices(session, client, settings, history_days=settings.readings_history_days)
     costs.compute_costs(session, settings)
-    return completeness.recompute(session, settings)
+    completeness.recompute(session, settings)
+
+    after = _final_days(session)
+    if after - before:
+        try:
+            _notify_new_days(session, settings, before, after)
+        except Exception as exc:
+            logger.warning("Push-Benachrichtigung fehlgeschlagen: {}", exc)
+    return len(after)
 
 
 def job_bills(session: Session, client: KrakenClient, settings: Settings) -> int:
