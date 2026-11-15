@@ -18,7 +18,7 @@ from oenergy.db.base import get_database, get_session
 from oenergy.db.models import Bill
 from oenergy.services import dashboard
 from oenergy.services.identity import token_status
-from oenergy.services.sync import latest_runs, run_job, status_overview
+from oenergy.services.sync import JOB_DESCRIPTIONS, JOB_LABELS, latest_runs, run_job, status_overview
 from oenergy.utils import to_local
 from oenergy.web.auth import (
     auth_enabled,
@@ -56,6 +56,8 @@ def _asset(path: str) -> str:
 
 
 templates.env.globals["asset"] = _asset
+templates.env.globals["job_labels"] = JOB_LABELS
+templates.env.globals["job_descriptions"] = JOB_DESCRIPTIONS
 templates.env.globals["current_user"] = current_user
 templates.env.globals["auth_enabled"] = lambda: auth_enabled(get_settings())
 

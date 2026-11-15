@@ -180,6 +180,25 @@ def run_all(*, database: Database | None = None, settings: Settings | None = Non
     return runs
 
 
+#: Anzeigenamen und Kurzbeschreibung der Jobs für die Oberfläche
+JOB_LABELS = {
+    "prices": "Preise",
+    "readings": "Zählerdaten",
+    "finalize": "Tagesabschluss",
+    "bills": "Rechnungen",
+    "account": "Konto",
+}
+
+JOB_DESCRIPTIONS = {
+    "prices": "Holt den Kundenpreis (Forecast) und die Börsenpreise (EPEX).",
+    "readings": "Holt neue Verbrauchsintervalle vom Zähler und holt die Historie nach.",
+    "finalize": "Rechnet nach der Lieferung (08:00 Uhr) die Kosten und den "
+    "Tagesstatus neu und markiert vollständige Tage als endgültig.",
+    "bills": "Holt die Rechnungen und den Kontostand.",
+    "account": "Hält Konto, Verträge, Lieferpunkt und Zähler aktuell.",
+}
+
+
 def status_overview(session: Session, limit: int = 20) -> dict:
     """Der letzte Lauf je Job und der letzte erfolgreiche Lauf."""
     runs = latest_runs(session, limit)

@@ -2,18 +2,20 @@
   <div class="table-scroll">
   <table class="table table-compact">
     <thead>
-      <tr><th>Job</th><th>Start</th><th>Ende</th><th class="num">Einträge</th><th>Status</th><th>Meldung</th></tr>
+      <tr><th>Job</th><th>Start</th><th>Ende</th><th class="num">Ergebnis</th><th>Status</th><th>Meldung</th></tr>
     </thead>
     <tbody>
       {% for run in runs %}
         <tr>
-          <td>{{ run.job }}</td>
+          <td>
+            <span title="{{ job_descriptions.get(run.job, '') }}">{{ job_labels.get(run.job, run.job) }}</span>
+          </td>
           <td>{{ localtime(run.started_at).strftime('%d.%m. %H:%M:%S') }}</td>
           <td class="muted">{{ localtime(run.finished_at).strftime('%H:%M:%S') if run.finished_at else '–' }}</td>
           <td class="num">{{ run.items }}</td>
           <td>
             <span class="badge badge-{{ 'final' if run.status == 'ok' else ('awaiting' if run.status == 'running' else 'delayed') }}">
-              {{ run.status }}
+              {{ 'ok' if run.status == 'ok' else ('läuft' if run.status == 'running' else 'Fehler') }}
             </span>
           </td>
           <td class="muted">{{ (run.message or '')[:120] }}</td>
@@ -22,6 +24,14 @@
     </tbody>
   </table>
   </div>
+  <p class="panel-sub" style="margin-top:10px">
+    <strong>Preise</strong> holt den Kundenpreis (Forecast) und die Börsenpreise ·
+    <strong>Zählerdaten</strong> holt neue Verbrauchsintervalle (0 = nichts Neues
+    vorhanden) · <strong>Tagesabschluss</strong> rechnet nach der Lieferung gegen
+    08:00 Uhr die Kosten und den Tagesstatus neu und markiert vollständige Tage
+    als endgültig · <strong>Rechnungen</strong> und <strong>Konto</strong> holen
+    Rechnungen bzw. Vertragsdaten.
+  </p>
 {% else %}
   <p class="muted">Noch keine Sync-Läufe.</p>
 {% endif %}
