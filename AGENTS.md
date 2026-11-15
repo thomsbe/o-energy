@@ -202,6 +202,8 @@ docker compose logs -f
   die `.env` eintragen; bei reinem HTTPS `COOKIE_SECURE=true`.
 - Passkeys: Registrierung auf der Seite *System*, RP-ID/Origin aus
   `WEBAUTHN_ORIGIN`/`WEBAUTHN_RP_ID` oder automatisch vom Host abgeleitet.
+  **WebAuthn braucht einen sicheren Kontext** (https oder localhost) – über
+  `http://homeservices:8000` bietet der Browser keine Passkeys an.
 
 Konfiguration komplett in `src/oenergy/config.py`; alle Variablen in
 `.env.example` dokumentiert.

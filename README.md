@@ -259,6 +259,11 @@ WEBAUTHN_RP_ID=strom.example.de
 
 Die Umsetzung nutzt `py_webauthn` (WebAuthn/FIDO2) ohne Cloudflare-Zwang.
 
+> **Wichtig:** WebAuthn funktioniert nur in einem sicheren Kontext – also über
+> `https://` oder `localhost`. Über `http://homeservices:8000` bietet der Browser
+> keine Passkeys an; dort bleibt nur das Passwort. Mit dem Cloudflare-Tunnel
+> (`https://…`) funktionieren die Passkeys.
+
 ## Jobs
 
 | Job | Rhythmus | Aufgabe |
