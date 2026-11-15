@@ -7,18 +7,56 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+Nichts vorbereitet.
+
+## [1.1.0] – 2026-11-15
+
+Die App ist jetzt für den Betrieb im Internet gedacht: Anmeldung mit Passwort und
+Passkey, dazu eine Arbeitsanleitung für Mitwirkende.
+
 ### Hinzugefügt
 
-- **Passkeys (WebAuthn)**: Anmeldung per Fingerabdruck, Gesicht oder Geräte-PIN
-  über `py_webauthn`, ohne Benutzername (es gibt nur einen Benutzer).
-  Registrierung auf der Seite *System*, Anmeldung über die Login-Seite.
-  RP-ID und Origin kommen aus `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` oder werden aus
-  der Anfrage abgeleitet.
-- **Anmeldung mit Benutzername und Passwort** (Argon2id über `pwdlib`, Sitzung in
-  einem signierten Cookie). Ein Benutzer genügt: `oenergy set-password` erzeugt
-  den Hash für die `.env`. Ohne gesetzten Hash bleibt die App offen und weist
-  mit einem Hinweis in der Kopfzeile darauf hin – für den Betrieb im Internet
-  sollte ein Passwort gesetzt sein.
+- **Anmeldung mit Passwort** (Argon2id über `pwdlib`, Sitzung in einem signierten
+  Cookie, 14 Tage gültig). Es gibt nur einen Benutzer, deshalb wird **kein
+  Benutzername** abgefragt. `oenergy set-password` erzeugt den Hash,
+  `--write-env` schreibt ihn direkt in die `.env` (inklusive Escaping für Docker
+  Compose). Ohne gesetzten Hash bleibt die App offen und weist in der Kopfzeile
+  mit einem gelben Hinweis darauf hin.
+- **Passkeys (WebAuthn)** über `py_webauthn`: Anmeldung per Fingerabdruck, Gesicht
+  oder Geräte-PIN. Registrierung auf der Seite *System* (mit Namen und der
+  Möglichkeit, einen Schlüssel wieder zu entfernen), Anmeldung über die
+  Login-Seite. RP-ID und Origin kommen aus `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` oder
+  werden aus der Anfrage abgeleitet.
+- **AGENTS.md**: vollständige Arbeitsanleitung für Menschen und KI-Agenten –
+  Aufbau, Technologiestapel, Teststrategie, live verifizierte API-Fakten,
+  Konventionen, Stolperfallen und Release-Checkliste.
+- **Optionaler Cloudflare-Tunnel** als Compose-Profil `tunnel`.
+- `oenergy token-info` und `oenergy whoami` zeigen die verbleibende Laufzeit der
+  Tokens und den angemeldeten Benutzer.
+
+### Behoben
+
+- Das Passkey-Skript lag außerhalb der Jinja-Blöcke und wurde deshalb gar nicht
+  ausgeliefert (die Liste blieb bei „Wird geladen …“, der Button tat nichts).
+  `base.html` hat dafür einen eigenen `{% block scripts %}`.
+- Die Passkey-Login-Endpunkte wurden von der Auth-Middleware auf die Login-Seite
+  umgeleitet; das JavaScript bekam HTML statt JSON. Die Endpunkte sind jetzt
+  öffentlich, und API-Aufrufe antworten bei fehlender Session mit JSON/401 statt
+  einer Umleitung.
+- **Docker Compose interpoliert die `.env`**: ein Argon2-Hash muss dort als
+  `$$argon2id$$…` escaped werden, sonst kommt er zerstört im Container an und
+  die Anmeldung schlägt immer fehl. `set-password --write-env` erledigt das
+  automatisch.
+- Die Tests hingen von der lokalen `.env` ab (Anmeldung, `COOKIE_SECURE`,
+  WebAuthn-Einstellungen) – sie setzen die Variablen jetzt selbst.
+- Die Scheduler-Startmeldung war noch im alten `%s`-Format und zeigte statt der
+  Poll-Intervalle „prices every %s min“.
+
+### Sicherheit
+
+- Die Anmeldung schützt auch die API-Endpunkte (Diagramme, Export). Öffentlich
+  sind nur `/login`, `/api/health`, die statischen Dateien und die
+  Passkey-Anmeldung.
 
 ## [1.0.0] – 2026-11-15
 

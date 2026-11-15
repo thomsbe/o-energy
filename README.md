@@ -1,6 +1,6 @@
 # o-energy
 
-> **Version 1.0.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
+> **Version 1.1.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
 
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
 Kraken-GraphQL-API regelmäßig ab, speichert Verbrauch, Zählerstände, Preise und
