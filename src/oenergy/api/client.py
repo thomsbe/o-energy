@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from oenergy import __version__
 from oenergy.api.auth import TokenManager
 from oenergy.api.errors import KrakenError, KrakenTransportError
 from oenergy.config import Settings, get_settings
@@ -29,7 +30,7 @@ class KrakenClient:
         self._session_factory = session_factory or (lambda: get_database().session())
         self._http = http_client or httpx.Client(
             timeout=self._settings.api_timeout_seconds,
-            headers={"User-Agent": f"{self._settings.app_name}/0.1 (+https://octopusenergy.de)"},
+            headers={"User-Agent": f"{self._settings.app_name}/{__version__} (+https://octopusenergy.de)"},
         )
         self._owns_http = http_client is None
         self._auth_style = "raw"

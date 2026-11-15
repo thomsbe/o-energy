@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from oenergy import __version__
 from oenergy.config import get_settings
 from oenergy.db.base import get_database
 from oenergy.jobs import start_scheduler, stop_scheduler
@@ -57,7 +58,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description="Dashboard für Octopus Energy Germany (Dynamic Octopus)",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

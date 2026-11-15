@@ -1,5 +1,7 @@
 # o-energy
 
+> **Version 0.8.0 (Beta)** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md).
+
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
 Kraken-GraphQL-API regelmäßig ab, speichert Verbrauch, Zählerstände, Preise und
 Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
@@ -227,7 +229,7 @@ src/oenergy/
 ├── web/          # FastAPI-Routen, Jinja-Templates
 ├── static/       # CSS, JS (Chart.js), Vendor-Assets (htmx, Chart.js)
 ├── jobs.py       # Scheduler
-├── cli.py        # oenergy serve|sync|probe|seed|init-db|jobs
+├── cli.py        # oenergy serve|sync|login|token-info|whoami|diagnose|probe|seed|reset|jobs
 └── main.py       # FastAPI-App
 ```
 
