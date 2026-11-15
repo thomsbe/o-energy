@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block title %}System{% endblock %}
+{% block title %}System
+
+{% endblock %}
 {% block content %}
 
 <section class="section">
@@ -310,8 +312,10 @@
   </table>
 </section>
 
+
 {% endblock %}
 
+{% block scripts %}
 <script>
   (function () {
     var list = document.getElementById("passkey-list");
@@ -438,3 +442,4 @@
     load();
   })();
 </script>
+{% endblock %}

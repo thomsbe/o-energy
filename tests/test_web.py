@@ -173,3 +173,11 @@ def test_public_paths_stay_reachable(client, monkeypatch) -> None:
 
     assert client.get("/api/health").status_code == 200
     assert client.get("/static/css/app.css").status_code == 200
+
+
+def test_system_page_renders_the_passkey_script(client, seeded) -> None:
+    """Regressionstest: In Jinja wird alles außerhalb von Blöcken nicht gerendert."""
+    html = client.get("/system").text
+    assert "passkey-register" in html
+    assert "/api/auth/passkeys" in html
+    assert "navigator.credentials.create" in html

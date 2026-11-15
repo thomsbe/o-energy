@@ -54,6 +54,8 @@
   {% block content %}{% endblock %}
 </main>
 
+{% block scripts %}{% endblock %}
+
 <footer class="footer">
   <span>o-energy · Octopus Energy Germany (Kraken API)</span>
   <span>Stand: {{ now.strftime('%d.%m.%Y %H:%M') if now else '-' }} MESZ</span>
