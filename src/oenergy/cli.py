@@ -206,9 +206,7 @@ def cmd_token_info(args: argparse.Namespace) -> int:
     access_expiry = _local(info.get("access_expires_at"))
     refresh_expiry = _local(info.get("refresh_expires_at"))
     print(f"Access-Token  : {'vorhanden' if info.get('logged_in') else '–'}")
-    print(
-        f"  gültig bis  : {info.get('access_expires_at')} ({_format_duration(info.get('access_expires_at'))})"
-    )
+    print(f"  gültig bis  : {access_expiry} ({_format_duration(info.get('access_expires_at'))})")
     print(f"Refresh-Token : {'vorhanden' if info.get('has_refresh_token') else '–'}")
     print(f"  gültig bis  : {refresh_expiry} ({_format_duration(info.get('refresh_expires_at'))})")
     print(f"  Art         : {info.get('refresh_kind') or '–'}")
@@ -290,13 +288,32 @@ def cmd_set_password(args: argparse.Namespace) -> int:
         print("Das Passwort sollte mindestens 8 Zeichen lang sein.", file=sys.stderr)
         return 2
 
+    hashed = hash_password(password)
+
+    if args.write_env:
+        target = Path(args.env_file or ".env")
+        lines = target.read_text(encoding="utf-8").splitlines() if target.exists() else []
+        # Docker Compose interpoliert die .env - die $ müssen als $$ escaped werden
+        entry = f"AUTH_PASSWORD_HASH={hashed.replace('$', '$$')}"
+        replaced = False
+        for index, line in enumerate(lines):
+            if line.startswith("AUTH_PASSWORD_HASH="):
+                lines[index] = entry
+                replaced = True
+                break
+        if not replaced:
+            lines.append(entry)
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"Passwort-Hash in {target} geschrieben (für Docker Compose escaped).")
+        print("Damit die Änderung wirkt: docker compose up -d --force-recreate")
+        return 0
+
     print()
-    print("Diese Zeile in die .env übernehmen:")
+    print("Diese Zeile in die .env übernehmen (in Docker Compose mit $$ escapen!):")
     print()
-    print(f"AUTH_PASSWORD_HASH={hash_password(password)}")
+    print(f"AUTH_PASSWORD_HASH={hashed.replace('$', '$$')}")
     print()
-    print("Zusätzlich sinnvoll (für HTTPS):")
-    print("COOKIE_SECURE=true")
+    print("Oder direkt schreiben lassen: oenergy set-password --write-env")
     return 0
 
 
@@ -413,6 +430,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     set_password = sub.add_parser("set-password", help="create the password hash for the login")
     set_password.add_argument("password", nargs="?", default=None, help="Passwort (ohne Angabe: interaktiv)")
+    set_password.add_argument(
+        "--write-env",
+        action="store_true",
+        help="den Hash direkt in die .env schreiben (mit $$ escaped)",
+    )
+    set_password.add_argument("--env-file", default=".env", help="Zieldatei (Standard: .env)")
     set_password.set_defaults(func=cmd_set_password)
 
     export = sub.add_parser("export", help="export the data as JSON (backup)")

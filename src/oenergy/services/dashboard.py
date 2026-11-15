@@ -158,7 +158,6 @@ def cost_summary(session: Session, settings: Settings) -> dict:
     stats = [
         stat for stat in session.scalars(select(DailyStat)) if meter_id is None or stat.meter_id == meter_id
     ]
-    stats_by_day = {stat.day: stat for stat in stats}
     yesterday = today - timedelta(days=1)
     today_cents = sum(stat.cost_cents for stat in stats if stat.day == today)
     yesterday_cents = sum(stat.cost_cents for stat in stats if stat.day == yesterday)

@@ -58,7 +58,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 ignore = ["RUF001", "RUF002", "RUF003"]  # deutsche Typografie (– etc.) ist gewollt
 
 [tool.ruff.lint.per-file-ignores]
-"src/oenergy/web/routes.py" = ["B008"]  # FastAPI braucht Depends() im Default
+"src/oenergy/web/*.py" = ["B008"]  # FastAPI braucht Depends() im Default
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
