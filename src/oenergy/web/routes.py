@@ -27,6 +27,16 @@ STATIC_DIR = PACKAGE_DIR / "static"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
+def _localtime(value):
+    """Naive UTC-Zeitstempel in die lokale Zeit umrechnen."""
+    if value is None:
+        return None
+    return to_local(value, _tz())
+
+
+templates.env.globals["localtime"] = _localtime
+
+
 def api_response(data: dict | list) -> JSONResponse:
     """JSON response that also serialises datetimes."""
     return JSONResponse(content=jsonable_encoder(data))

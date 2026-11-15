@@ -107,7 +107,7 @@
     <div class="card-head"><span class="card-title">Datenstand</span></div>
     <div class="card-value small">
       {% if last_success %}
-        {{ last_success.started_at.strftime('%d.%m. %H:%M') }}
+        {{ localtime(last_success.started_at).strftime('%d.%m. %H:%M') }}
       {% else %}
         <span class="muted">noch kein Sync</span>
       {% endif %}

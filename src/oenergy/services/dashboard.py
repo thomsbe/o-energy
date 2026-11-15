@@ -283,9 +283,13 @@ def consumption_chart_data(session: Session, settings: Settings, days: int = 3) 
             }
         )
 
+    # Der heutige Tag hat noch keine Zählerdaten und gehört deshalb nicht
+    # in das Diagramm (er kommt mit den Daten des Folgetags nach).
     days_meta = []
     for offset in range(days):
         day = start_day + timedelta(days=offset)
+        if day >= today:
+            continue
         stat = stats.get(day)
         days_meta.append(
             {
@@ -377,7 +381,9 @@ def cost_chart_data(session: Session, settings: Settings, days: int = 30) -> dic
     stat_query = select(DailyStat).where(DailyStat.day >= start).order_by(DailyStat.day)
     if meter_id is not None:
         stat_query = stat_query.where(DailyStat.meter_id == meter_id)
-    stats = list(session.scalars(stat_query))
+    # Der heutige Tag hat noch keine Daten (Lieferung erst am Folgetag) -
+    # er gehört nicht in das Diagramm.
+    stats = [stat for stat in session.scalars(stat_query) if stat.day < today]
     return {
         "labels": [stat.day.isoformat() for stat in stats],
         "kwh": [stat.kwh for stat in stats],

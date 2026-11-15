@@ -7,8 +7,8 @@
       {% for run in runs %}
         <tr>
           <td>{{ run.job }}</td>
-          <td>{{ run.started_at.strftime('%d.%m. %H:%M:%S') }}</td>
-          <td class="muted">{{ run.finished_at.strftime('%H:%M:%S') if run.finished_at else '–' }}</td>
+          <td>{{ localtime(run.started_at).strftime('%d.%m. %H:%M:%S') }}</td>
+          <td class="muted">{{ localtime(run.finished_at).strftime('%H:%M:%S') if run.finished_at else '–' }}</td>
           <td class="num">{{ run.items }}</td>
           <td>
             <span class="badge badge-{{ 'final' if run.status == 'ok' else ('awaiting' if run.status == 'running' else 'delayed') }}">

@@ -15,13 +15,6 @@
   <div class="tiles tiles-static">
     <div class="card">
       <div class="card-head">
-        <span class="card-title">Heute</span>
-        {{ m.state_badge(consumption.today_state) }}
-      </div>
-      <div class="card-value">{{ m.kwh_pending(consumption.today_kwh, consumption.today_state) }}</div>
-    </div>
-    <div class="card">
-      <div class="card-head">
         <span class="card-title">Gestern</span>
         {{ m.state_badge(consumption.yesterday_state) }}
       </div>

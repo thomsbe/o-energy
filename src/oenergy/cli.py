@@ -9,7 +9,7 @@ from pathlib import Path
 from oenergy.config import get_settings
 from oenergy.db.base import get_database
 from oenergy.logging_config import setup_logging
-from oenergy.services.identity import format_identity
+from oenergy.services.identity import format_identity, token_status
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -99,6 +99,18 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+def _local(moment: datetime | None) -> datetime | None:
+    """Naive UTC-Zeit in die lokale Zeit umrechnen."""
+    if moment is None:
+        return None
+    from zoneinfo import ZoneInfo
+
+    from oenergy.config import get_settings
+
+    tz = ZoneInfo(get_settings().timezone)
+    return moment.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz).replace(tzinfo=None)
+
+
 def _format_duration(moment: datetime | None, now: datetime | None = None) -> str:
     if moment is None:
         return "unbekannt"
@@ -121,8 +133,9 @@ def cmd_login(args: argparse.Namespace) -> int:
     settings = get_settings()
     if not settings.has_credentials:
         print(
-            "Keine Zugangsdaten konfiguriert.\n"
-            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
+            "Für die Anmeldung werden die Zugangsdaten gebraucht.\n"
+            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env "
+            "- nach dem Login kann das Passwort wieder entfernt werden.",
             file=sys.stderr,
         )
         return 2
@@ -190,17 +203,16 @@ def cmd_token_info(args: argparse.Namespace) -> int:
         print("Noch kein Login erfolgt - mit 'oenergy login' anmelden.")
         return 1
 
+    access_expiry = _local(info.get("access_expires_at"))
+    refresh_expiry = _local(info.get("refresh_expires_at"))
     print(f"Access-Token  : {'vorhanden' if info.get('logged_in') else '–'}")
     print(
         f"  gültig bis  : {info.get('access_expires_at')} ({_format_duration(info.get('access_expires_at'))})"
     )
     print(f"Refresh-Token : {'vorhanden' if info.get('has_refresh_token') else '–'}")
-    print(
-        f"  gültig bis  : {info.get('refresh_expires_at')} "
-        f"({_format_duration(info.get('refresh_expires_at'))})"
-    )
+    print(f"  gültig bis  : {refresh_expiry} ({_format_duration(info.get('refresh_expires_at'))})")
     print(f"  Art         : {info.get('refresh_kind') or '–'}")
-    print(f"zuletzt aktualisiert: {info.get('updated_at')}")
+    print(f"zuletzt aktualisiert: {_local(info.get('updated_at'))}")
 
     identity = _load_identity()
     if identity.get("known"):
@@ -231,16 +243,25 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     from oenergy.services.diagnose import diagnose, format_report
 
     settings = get_settings()
-    if not settings.has_credentials:
-        print(
-            "Keine Zugangsdaten konfiguriert.\n"
-            "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
-            file=sys.stderr,
-        )
-        return 2
-
     database = get_database()
     database.create_all()
+
+    # Für die Diagnose reicht der gespeicherte Token - das Refresh-Token genügt.
+    if not settings.has_credentials:
+        with database.session() as session:
+            stored = token_status(session)
+        if not stored.get("logged_in"):
+            print(
+                "Keine Zugangsdaten konfiguriert.\n"
+                "Setze OCTOPUS_EMAIL und OCTOPUS_PASSWORD (oder OCTOPUS_API_KEY) in der .env.",
+                file=sys.stderr,
+            )
+            return 2
+        print(
+            "Hinweis: Es sind keine Zugangsdaten hinterlegt - die Diagnose nutzt den gespeicherten Token.",
+            file=sys.stderr,
+        )
+
     with KrakenClient(settings, database.session) as client, database.session() as session:
         report = diagnose(session, client, settings)
 

@@ -121,6 +121,19 @@ HTMX-Web-Oberfläche.
 - Das Backup-Skript erstellt jetzt zusätzlich zum SQLite-Backup einen
   JSON-Export und behält die 10 neuesten Sicherungen.
 
+### Behoben (Review-Runde 4)
+
+- **Zeitzone**: die Zeitstempel in der Oberfläche wurden in UTC statt in der
+  lokalen Zeit angezeigt (Sync-Läufe wirkten eine Stunde zu früh). Alle
+  Anzeigen werden jetzt nach `TIMEZONE` umgerechnet - auch die Ausgaben von
+  `oenergy token-info`.
+- **„Heute“ entfernt**: der heutige Tag kann keine Zählerdaten haben (Lieferung
+  erst am Folgetag). Die Kacheln „Verbrauch heute“ und „Kosten heute“ sowie der
+  heutige Tag in den Diagrammen (Verbrauchsprofil, Tageskosten) sind entfernt.
+- **Diagnose ohne Passwort**: `oenergy diagnose` nutzt jetzt den gespeicherten
+  Token und funktioniert auch ohne Zugangsdaten in der `.env`. `oenergy login`
+  sagt klar, dass für eine Anmeldung das Passwort nötig ist.
+
 ### Behoben
 
 - Die Monatsprognose war fehlerhaft: sie zählte die bereits angefallenen Kosten

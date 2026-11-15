@@ -89,12 +89,12 @@
       <tbody>
         <tr>
           <td>Access-Token</td>
-          <td class="num">{{ token.access_expires_at }}</td>
+          <td class="num">{{ localtime(token.access_expires_at) }}</td>
         </tr>
         <tr>
           <td>Refresh-Token ({{ token.refresh_kind or '–' }})</td>
           <td class="num">
-            {{ token.refresh_expires_at }}
+            {{ localtime(token.refresh_expires_at) }}
             {% if token.refresh_days_left is not none %}
               <span class="badge badge-{{ 'delayed' if token.needs_login else ('partial' if token.expires_soon else 'final') }}">
                 {% if token.needs_login %}
