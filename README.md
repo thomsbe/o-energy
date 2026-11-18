@@ -382,6 +382,9 @@ Im Docker-Container landet das Log zusätzlich in `/data/logs/o-energy.log`
 
 ## Mitwirken
 
+**[AI.md](AI.md)** beschreibt, wie dieses Projekt mit KI-Unterstützung entwickelt
+wurde und welche Leitplanken für Mitwirkende gelten (mit und ohne KI).
+
 **[CONTRIBUTING.md](CONTRIBUTING.md)** ist der Einstieg für Menschen,
 **[AGENTS.md](AGENTS.md)** die vollständige Arbeitsanleitung – sie richtet sich
 auch an KI-Agenten. Beide enthalten Aufbau, Technologiestapel, Teststrategie,

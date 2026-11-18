@@ -7,6 +7,11 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Dokumentation
+
+- **AI.md**: wie das Projekt mit KI-Unterstützung entwickelt wurde und welche
+  Leitplanken für Mitwirkende gelten (mit und ohne KI).
+
 ### Behoben
 
 - **Die Lieferung der Zählerdaten muss nicht pünktlich sein**: bisher hing die

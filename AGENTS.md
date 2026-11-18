@@ -236,7 +236,18 @@ Konfiguration komplett in `src/oenergy/config.py`; alle Variablen in
 
 ---
 
-## 9. Wenn etwas unklar ist
+## 9. KI-Unterstützung
+
+Dieses Projekt wurde **mit** KI-Agenten entwickelt (Kilo Code, MiniMax 3.1 Flash),
+überwacht und verantwortet vom Maintainer. Die Leitplanken für Mitwirkende –
+mit und ohne KI – stehen in [AI.md](AI.md); für dich als Agent ist das
+Wichtigste: **diese Datei (AGENTS.md) lesen und die Regeln in § 1 einhalten.**
+Verifiziere jede Aussage über die API oder eine Bibliothek, bevor du sie
+verwendest (Context7, Projektdoku, `oenergy diagnose`).
+
+---
+
+## 10. Wenn etwas unklar ist
 
 1. **Context7/Doku befragen** (Pflicht, wenn verfügbar).
 2. `README.md` (Bedienung), `PLAN.md` (Architektur und API-Recherche),
@@ -244,3 +255,4 @@ Konfiguration komplett in `src/oenergy/config.py`; alle Variablen in
 3. `uv run oenergy diagnose` / `probe` – die API fragen statt raten.
 4. Bei Unklarheit in der Anleitung: **diese Datei aktualisieren** – sie ist die
    Schnittstelle zu allen, die nach dir am Projekt arbeiten.
+5. `AI.md` enthält die Leitplanken für KI-gestützte Beiträge.

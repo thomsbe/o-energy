@@ -52,6 +52,19 @@ am besten auf Deutsch, ein Satz pro Zeile.
   ohne HTML. Das macht sie ohne Mocking testbar.
 * **Keine Geheimnisse** in den Commits.
 
+## KI-gestützte Beiträge
+
+KI-Agenten sind in diesem Projekt ausdrücklich willkommen – das Projekt ist
+ursprünglich mit einem Agenten entstanden (siehe [AI.md](AI.md)). Maßgeblich ist
+nicht, ob und womit gearbeitet wurde, sondern dass:
+
+* die Regeln aus [AGENTS.md](AGENTS.md) eingehalten werden (Doku statt Annahmen,
+  live verifizierte API-Fakten, Tests für jede Verhaltensänderung),
+* die CI grün ist,
+* der Maintainer den PR reviewt und verantwortet.
+
+Erwähne im PR kurz, wenn eine KI beteiligt war – das hilft beim Review.
+
 ## API-Anfragen
 
 Die Octopus-API ist undokumentiert und authorizationsabhängig. Bevor du eine
