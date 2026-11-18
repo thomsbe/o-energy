@@ -399,10 +399,12 @@ siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
    Session-Secret, keine vollständige E-Mail-Adresse, keine Kontonummer/
    Seriennummern im Klartext. Aggregierte Werte ja, Identifikatoren nur
    maskiert.
-4. **Getrennter Prozess und eigener Port.** Der MCP-Server läuft nicht im
-   Web-Prozess (sonst teilt er sich die SQLite-Datei mit Schreibzugriffen) und
-   hört nur auf `127.0.0.1` – veröffentlicht wird er ausschließlich über den
-   Tunnel, mit eigenem Pfad (`/mcp`).
+4. **Isolierter Pfad.** Der MCP-Endpunkt läuft im Web-Prozess, aber unter
+   einem eigenen Pfad (`/mcp`) mit **eigener Middleware** (eigener Token, eigenes
+   Rate-Limit, eigenes Body-Limit) – getrennt vom Web-Passwort und vom
+   `X-OEnergy-Token`. FastMCP lässt sich dafür per `app.mount()` in die
+   bestehende App hängen; ein eigener Prozess/Port bleibt als Alternative
+   möglich (Ingress-Regel im Tunnel).
 5. **Rate-Limit und Body-Limit** wie beim Web-Teil.
 6. **Opt-in.** Ohne gesetzten Token läuft der MCP-Server gar nicht (kein
    versehentlich offener Zugang).
@@ -451,16 +453,27 @@ Als **Ressourcen** zusätzlich: `energy://status`, `energy://today`, `energy://m
 | **M2** | Service-Schicht | `services/mcp_tools.py`: reine Funktionen, die `dashboard`/`costs`/`pricing` aufrufen und **maskierte**, aggregierte Rückgaben liefern (kein HTTP, keine MCP-Typen) | Unit-Tests ohne MCP-Abhängigkeit grün |
 | **M3** | MCP-Server | `src/oenergy/mcp_server.py`: FastMCP-Instanz, die Tools und Ressourcen aus M2 registriert | `uv run oenergy mcp` startet, `tools/list` zeigt die Katalog |
 | **M4** | Authentifizierung | Starlette-Middleware: `Authorization: Bearer <MCP_TOKEN>` – zeitkonstanter Vergleich, 401 ohne Token, Rate-Limit | ohne Token 401, mit Token 200 (auch im Test) |
-| **M5** | CLI und Betrieb | `oenergy mcp --port 8001`; Compose-Profil `mcp`; Port nur auf Loopback; eigener Token in der `.env` (`MCP_TOKEN`, per `oenergy generate-mcp-token`) | Container läuft, Healthcheck ok |
+| **M5** | Betrieb | MCP läuft **im Web-Prozess** unter `/mcp` (`app.mount`); eigener Token in der `.env` (`MCP_TOKEN`, per `oenergy generate-mcp-token`); optional ein separates Compose-Profil `mcp` mit eigenem Port, falls der MCP-Zugang doch getrennt laufen soll | `/mcp` antwortet mit Token, ohne Token 401 |
 | **M6** | Tests | Tests für die Werkzeugfunktionen (M2) und für die Auth-Middleware (M4), ein Test mit einem echten MCP-Client (FastMCP-Client gegen den Server) | `pytest` grün |
 | **M7** | Doku | README-Abschnitt „MCP-Schnittstelle“, SECURITY.md (Was der MCP-Zugang darf), AGENTS.md | Doku beschreibt den Ist-Zustand |
-| **M8** | Veröffentlichung | Optional: eigener Tunnel-Pfad `/mcp` und Freigabe im Betrieb | von außen erreichbar, mit Token |
+| **M8** | Veröffentlichung | Der Tunnel braucht **keine** zusätzliche Regel – `/mcp` liegt auf demselben Host wie die Web-App. Optional eine eigene Subdomain (`mcp.strom.tbaer.de`) per Ingress-Regel | von außen erreichbar, mit Token |
 
 ### 9.5 Offene Punkte für die Entscheidung
 
-* **Port/Pfad:** eigener Port (8001) mit eigenem Tunnel-Eintrag, oder `/mcp`
-  unter dem bestehenden Port? (Empfehlung: **eigener Port**, damit die
-  Web-Sicherheitsmechanismen nicht ausgehebelt werden.)
+* **Port/Pfad:** **entschieden: `/mcp` unter dem bestehenden Port.** Der
+  Cloudflare-Tunnel kann zwar auch andere Ports veröffentlichen (Ingress-Regeln
+  mit `service: http://localhost:8001`), aber der MCP-Endpunkt lässt sich
+  **auch im selben Web-Prozess** isoliert betreiben: FastMCP liefert mit
+  `mcp.http_app()` eine ASGI-App, die per `app.mount("/mcp", mcp_app)` in die
+  bestehende FastAPI-App gehängt wird (mit `lifespan=mcp_app.lifespan`, sonst
+  initialisiert der Session-Manager nicht).
+  *Vorteil:* ein Prozess, eine SQLite-Verbindung, keine doppelte
+  Scheduler-/DB-Logik, und der Tunnel braucht keine zusätzliche Regel.
+  *Damit die Isolation bleibt*, bekommt der MCP-Pfad eine **eigene
+  Middleware**: eigener Bearer-Token, eigener Rate-Limit, eigenes Body-Limit –
+  getrennt vom Web-Passwort und vom `X-OEnergy-Token`.
+  *Hinweis:* FastMCP 4.x bringt keine eingebaute Bearer-Authentifizierung mit –
+  die Absicherung kommt aus der eigenen Middleware (siehe 9.2).
 * **Wie kommt der Agent an den Token?** Per `.env` (Datei) oder über einen
   MCP-Client mit eigener Anmeldung? (Empfehlung: `.env` – passend zum
   `AUTH_BYPASS_TOKEN`-Muster.)
@@ -475,6 +488,7 @@ Als **Ressourcen** zusätzlich: `energy://status`, `energy://today`, `energy://m
 | Risiko | Gegenmaßnahme |
 |---|---|
 | Der MCP-Zugang wird zum Datenabfluss (Adresse, Kontonummer) | Maskierung in der Service-Schicht (M2), keine Identifikatoren in den Antworten |
+| Der MCP-Pfad umgeht die Web-Anmeldung | eigene Middleware für `/mcp` mit eigenem Token – der Web-Passwort-Login gilt dort nicht |
 | Der MCP-Server umgeht die Web-Anmeldung | eigener Token, eigener Prozess, eigener Port, Rate-Limit |
 | Der MCP-Server wird zum Schreibpfad | strikt read-only, keine Tools mit Schreibwirkung |
 | Der Tunnel macht den MCP-Port öffentlich | Token-Pflicht, Rate-Limit, Healthcheck ohne Daten |
