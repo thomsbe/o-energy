@@ -1,5 +1,9 @@
 # o-energy
 
+[![CI](https://github.com/<owner>/o-energy/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/o-energy/actions/workflows/ci.yml)
+[![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blau.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
+
 > **Version 1.2.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
 
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
@@ -22,11 +26,11 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
   Beim Dynamic Octopus besteht der Arbeitspreis aus mehreren Raten je Zeitfenster
   (z. B. Basiskomponente + dynamische Komponente) – die App summiert sie zum
   tatsächlichen Kundenpreis und zeigt die Bestandteile an.
-* **Verbrauch**: 15-Minuten-Intervalle, Tages-/Monatswerte, Zählerstände (roh),
-  Zählerregister. Im Diagramm „Verbrauch und Preis“ liegt die Preislinie über dem
-  Verbrauchsprofil der letzten zwei Tage – so sieht man, zu welchem Preis
-  verbraucht wurde. Darunter lässt sich der Tagesverbrauch Monat für Monat
-  durchblättern.
+* **Verbrauch**: 15-Minuten-Intervalle (Quelle: Smart-Meter-Gateway), Tages-/
+  Monatswerte, die zuletzt gemessenen Intervalle. Im Diagramm „Verbrauch und Preis“
+  liegt die Preislinie über dem Verbrauchsprofil der letzten zwei Tage – so sieht
+  man, zu welchem Preis verbraucht wurde. Darunter lässt sich der Tagesverbrauch
+  Monat für Monat durchblättern.
 * **Kosten**: Energiekosten (Verbrauch × Zeitpreis) + Grundpreis, Tages-/Monats-
   /Jahreswerte, Monatsprognose, Abgleich mit den Rechnungen aus dem Kundenkonto.
 * **24-h-Latenz**: Die Werte des Zähleranbieters kommen erst am Folgetag gegen
@@ -133,10 +137,9 @@ uv run oenergy diagnose
 ```
 
 Der Diagnose-Lauf meldet, was der Account tatsächlich liefert: Konto, Agreement
-(Tarif, dynamisch/klassisch), Zähler (Nummer, Register), Verfügbarkeit von
-`agreementRates`, `unitRateForecast` und EPEX, Anzahl der Zählerdaten, erkannte
-Einheit (kWh/Wh) sowie den Status der letzten Tage. Die Rohdaten landen optional
-mit `--out diagnose.json` als JSON.
+(Tarif, dynamisch/klassisch), Lieferpunkt und Zähler, Verfügbarkeit von
+`unitRateForecast` und EPEX, Anzahl der Verbrauchsintervalle sowie den Status der
+letzten Tage. Die Rohdaten landen optional mit `--out diagnose.json` als JSON.
 
 Alternativ gibt `uv run oenergy probe --out probe.json` die kompletten
 Rohantworten der API aus.
@@ -194,6 +197,9 @@ Oberfläche (Seite *System* → *Export herunterladen*).
 | `oenergy serve` | Web-App starten |
 | `oenergy login` | einmalig anmelden, Tokens speichern |
 | `oenergy token-info` | Laufzeit der gespeicherten Tokens anzeigen |
+| `oenergy whoami` | angemeldeten Benutzer, Konto und Tarif anzeigen |
+| `oenergy set-password` | Passwort-Hash für die Anmeldung erzeugen (`--write-env`) |
+| `oenergy generate-token` | Secret-Header für den Anmelde-Bypass erzeugen (`--write-env`) |
 | `oenergy sync [job\|all]` | Synchronisation ausführen (`account`, `prices`, `readings`, `finalize`, `bills`) |
 | `oenergy diagnose` | Prüfen, welche Daten der Account liefert |
 | `oenergy probe` | Rohantworten der API dumpen |
@@ -228,7 +234,8 @@ Den ausgegebenen Hash in die `.env` eintragen:
 ```bash
 AUTH_ENABLED=true
 AUTH_USERNAME=admin
-AUTH_PASSWORD_HASH=$argon2id$v=19$m=65536,t=3,p=4$...
+# der Hash kommt aus "oenergy set-password --write-env" (dort ist er bereits escaped)
+AUTH_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$…$$…
 ```
 
 Danach ist die App nur mit Anmeldung erreichbar (`/login`); die Sitzung liegt in
@@ -348,7 +355,7 @@ uv run oenergy sync prices --history-days 30   # Börsenpreise für die Historie
 | `READINGS_HISTORY_CHUNK_DAYS` | `30` | wie weit ein Lauf die Historie zurückgreift |
 | `READINGS_HISTORY_MAX_DAYS` | `0` | Limit für die Historie (0 = unbegrenzt) |
 | `READINGS_MAX_WINDOW_DAYS` | `7` | Maximale Größe einer Einzelabfrage |
-| `GAP_RETRY_MINUTES` | `60` | Wartezeit, bevor eine leere Lücke erneut geprüft wird |
+| `GAP_RETRY_MINUTES` | `30` | Wartezeit, bevor eine leere Lücke erneut geprüft wird |
 | `SLOT_MINUTES` | `15` | Länge eines Verbrauchsintervalls |
 | `ENERGY_UNIT` | `auto` | `auto`, `kwh` oder `wh` (Zählregister) |
 | `API_MIN_INTERVAL_SECONDS` | `1.2` | Mindestabstand zwischen zwei API-Requests (Rate-Limit) |
@@ -375,10 +382,10 @@ Im Docker-Container landet das Log zusätzlich in `/data/logs/o-energy.log`
 
 ## Mitwirken
 
-**[AGENTS.md](AGENTS.md)** enthält die vollständige Arbeitsanleitung: Aufbau,
-Technologiestapel, Teststrategie, die live verifizierten Fakten zur
-Octopus-API, Konventionen und Stolperfallen. Sie richtet sich an Menschen wie an
-KI-Agenten – wer mitwirkt, sollte sie lesen.
+**[CONTRIBUTING.md](CONTRIBUTING.md)** ist der Einstieg für Menschen,
+**[AGENTS.md](AGENTS.md)** die vollständige Arbeitsanleitung – sie richtet sich
+auch an KI-Agenten. Beide enthalten Aufbau, Technologiestapel, Teststrategie,
+die live verifizierten Fakten zur Octopus-API, Konventionen und Stolperfallen.
 
 ```bash
 uv run pytest            # Tests
@@ -386,15 +393,20 @@ uv run ruff check .      # Linting
 uv run ruff format .     # Formatierung
 ```
 
+Die CI (GitHub Actions) prüft bei jedem Push Linting, Formatierung, Tests und
+den Paketbau. Fehlerberichte und Wünsche gibt es über die
+[Issue-Vorlagen](.github/ISSUE_TEMPLATE).
+
 ## Projektstruktur
 
 ```
 src/oenergy/
 ├── api/          # GraphQL-Client, Token-Management, Queries
 ├── db/           # SQLAlchemy-Modelle, Session
-├── services/     # sync, preise, verbrauch, kosten, backfill, dashboard
-├── web/          # FastAPI-Routen, Jinja-Templates
-├── static/       # CSS, JS (Chart.js), Vendor-Assets (htmx, Chart.js)
+├── services/     # sync, prices, pricing, consumption, costs, backfill,
+│                 # completeness, dashboard, webauthn, push, transfer, identity
+├── web/          # FastAPI-Routen, Jinja-Templates, Anmeldung (auth.py)
+├── static/       # CSS, JS, Icons, PWA (manifest, sw.js), Vendor (htmx, Chart.js)
 ├── jobs.py       # Scheduler
 ├── cli.py        # oenergy serve|sync|login|token-info|whoami|diagnose|probe|seed|reset|jobs
 └── main.py       # FastAPI-App
@@ -409,9 +421,13 @@ uv run ruff format .     # Formatierung
 uv run alembic revision --autogenerate -m "…"   # Migration
 ```
 
-## Lizenz
+## Lizenz und Sicherheit
 
 MIT – siehe [LICENSE](LICENSE).
+
+Sicherheitsmodell, Meldeweg für Schwachstellen und Empfehlungen für den Betrieb
+im Internet: **[SECURITY.md](SECURITY.md)**.
+Verhaltensregeln für die Zusammenarbeit: **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**.
 
 ## Hinweise
 

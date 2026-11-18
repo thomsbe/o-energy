@@ -296,19 +296,21 @@ mutation { obtainKrakenToken(input:{email:"$E", password:"$P"}) { token refreshT
 | S6 Kosten | ✅ | Intervallkosten, Grundpreisanteil, Tages-/Monats-/Jahreswerte, Monatsprognose, Rechnungsabgleich |
 | S7 Web-UI | ✅ | Dashboard, Verbrauch, Preise, Kosten, System; HTMX-Live-Kacheln, Chart.js-Diagramme, Preis-Matrix, Dark Mode |
 | S8 Betrieb | ✅ | Dockerfile (uv-Basis, Healthcheck), `docker-compose.yml` mit optionalem Worker, Backup-Skript, README |
-| S9 Qualität | ✅ | 40 Tests grün (inkl. End-to-End-Test der kompletten Pipeline gegen ein gemocktes Kraken), `ruff check`/`ruff format` sauber |
+| S9 Qualität | ✅ | 81 Tests grün (inkl. End-to-End-Test der kompletten Pipeline gegen ein gemocktes Kraken), `ruff check`/`ruff format` sauber |
 | **Backfill** | ✅ | Gap-Erkennung über Datenabdeckung + abgefragte Fenster, Tagesraster, Retry-Fenster; bereits abgerufene Bereiche werden nie erneut angefragt |
 | **Diagnose** | ✅ | `oenergy diagnose` prüft live, ob Konto/Tarif/Zähler/Preisquellen liefern – Ausgabe: Konto, Agreement, Zähler, Preisquellen, Register, erkannte Einheit, Tagesstatus |
 
 ### Zusätzlich umgesetzt (über den Plan hinaus)
 
 * **Automatischer Backfill** mit Fensterspeicher (`reading_windows`) – vom Nutzer angeregt.
-* **Kosten-Fallback**: fehlt für einen Slot der Kundenpreis, wird EPEX + gemittelter
-  Aufschlag (aus parallel vorhandenen Kundenpreisen) verwendet.
+* **Preis-Historie**: der Kundenpreis der Vergangenheit wird **exakt** rekonstruiert
+  als EPEX + Basiskomponente (17,35 ct/kWh netto) – nicht als gemittelter Aufschlag.
 * **Auth-Robustheit**: neben dem rohen JWT wird automatisch `Bearer <token>` probiert,
   erst danach wird das Token erneuert.
-* **Slot-Zuordnung korrigiert**: der Verbrauch zwischen zwei Zählerständen gehört in
-  das Intervall, das mit dem späteren Zählerstand endet (vorher: 15 min verschoben).
+* **Verbrauchsdaten**: kommen aus `property(id).measurements(RAW_INTERVAL)` – echte
+  15-Minuten-Intervalle des Smart-Meter-Gateways. Die Zählerregister werden nicht
+  mehr ausgewertet.
+* **Anmeldung, Passkeys, PWA und Web-Push** – siehe `CHANGELOG.md` 1.1.0/1.2.0.
 * **Container läuft als nicht-root User** (uid/gid 1000) mit Healthcheck.
 * **Preiszusammensetzung**: Beim Dynamic Octopus besteht der Arbeitspreis aus
   mehreren Raten je Zeitfenster (Basiskomponente 20,65 ct/kWh + dynamische
@@ -343,11 +345,22 @@ mutation { obtainKrakenToken(input:{email:"$E", password:"$P"}) { token refreshT
 | API-Key | Gibt es im deutschen Portal nicht – dort läuft ein OAuth-Flow (`/api/auth/kraken-oauth-start`). Einmalig `oenergy login`, danach reicht das Refresh-Token |
 | API-Limit | Rate Limit aktiv („too many requests“): Client drosselt auf 1,2 s/Request und wartet bei „internal error“ bis zu 60 s |
 
-### Offen
+### Erledigt (die offenen Fragen sind beantwortet)
 
-1. `OCTOPUS_EMAIL` / `OCTOPUS_PASSWORD` in `.env` eintragen → `uv run oenergy diagnose` zeigt,
-   welche Preis- und Zählernqueries der Account tatsächlich liefert.
-2. Prüfen, ob `agreementRates` (Preisreihe mit Gültigkeitszeiträumen) oder `unitRateForecast`
-   die belastbare 15-Minuten-Preisreihe liefert – die Preis-Dienst-Reihenfolge deckt beides ab.
-3. Prüfen der Register/OBIS-Codes und der Einheit (kWh/Wh) des Zählers → `ENERGY_UNIT` bei Bedarf fixieren.
-4. `MELO_NUMBER`/`ACCOUNT_NUMBER` nur setzen, wenn mehrere Verträge im Konto liegen.
+1. **Zugangsdaten** stehen in der `.env`; `oenergy diagnose` prüft live, was der
+   Account liefert. Das Passwort wird nach dem ersten `oenergy login` nicht mehr
+   gebraucht (20-Tage-Refresh-Token in der Datenbank).
+2. **Preisreihe**: `agreementRates` ist gesperrt → `unitRateForecast` (heute/Zukunft)
+   plus EPEX für die Historie (rekonstruiert als EPEX + Basiskomponente).
+3. **Register/Einheit**: die Intervalle kommen direkt in kWh aus dem Gateway
+   („Amphio“), ein Register ist nicht nötig – `ENERGY_UNIT` bleibt auf `auto`.
+4. **MELO/ACCOUNT**: der Lieferpunkt und die MaLo kommen aus `account.properties`;
+   `ACCOUNT_NUMBER`/`MELO_NUMBER` werden nur gebraucht, wenn mehrere Lieferpunkte
+   im Konto liegen.
+
+### Nachtrag (18.11.2026) – Betrieb im Alltag
+
+Nach drei Tagen Dauerbetrieb: die Zählerdaten kommen gegen **08:00 Uhr**, der
+stündliche Job holt sie um **08:07**, die Push-Nachricht geht **6 Sekunden**
+später raus. Keine Fehler in den Sync-Läufen. Die Tageswerte sind konsistent
+(Intervall-Summe = Tageswert, 96/96 Slots, als endgültig markiert).

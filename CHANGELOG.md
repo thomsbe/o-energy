@@ -7,7 +7,16 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-Nichts vorbereitet.
+### Behoben
+
+- **Die Lieferung der Zählerdaten muss nicht pünktlich sein**: bisher hing die
+  Abholung am stündlichen Job und einem Sperrfenster von 60 Minuten – kam die
+  Lieferung nach 08:00 Uhr, konnte der Vortag bis zur nächsten vollen Stunde
+  unsichtbar bleiben. Das Sperrfenster ist jetzt 30 Minuten, und der
+  *Tagesabschluss* (08:17) holt die Daten selbst ab, statt sich auf den
+  stündlichen Job zu verlassen.
+- Die Sync-Übersicht nennt die Jobs jetzt verständlich („Preise“, „Zählerdaten“,
+  „Tagesabschluss“ …) und erklärt sie in einem Satz darunter.
 
 ## [1.2.0] – 2026-11-15
 

@@ -1,0 +1,72 @@
+# Sicherheitsrichtlinie
+
+## Einhaltung
+
+**o-energy** ist ein privates Selbstbedienungswerkzeug: Es läuft auf einem eigenen
+Rechner, greift mit den Zugangsdaten des Nutzers auf das Octopus-Portal zu und
+zeigt Verbrauchs-, Preis- und Kontodaten. Es ist **kein Mehrbenutzer-Produkt**.
+
+| Version | Unterstützt |
+|---|---|
+| 1.2.x | ✅ |
+| < 1.2 | – |
+
+## Eine Schwachstelle melden
+
+Bitte **nicht** über ein öffentliches Issue melden. Schreib stattdessen eine
+privat Nachricht an den Maintainer (siehe die Kontaktadresse im Repository) mit:
+
+* Beschreibung der Schwachstelle und der betroffenen Version
+* Schritten zur Reproduktion
+* Einschätzung der Auswirkung (welche Daten wären betroffen?)
+
+Du bekommst eine Rückmeldung, ob das Ticket angenommen wird. Eine Veröffentlichung
+erfolgt erst, wenn ein Fix verfügbar ist.
+
+## Sicherheitsmodell
+
+### Was die App schützt
+
+* **Anmeldung**: Argon2id-Hash in der `.env`, Sitzung in einem **signierten**
+  Cookie (`SameSite=Lax`, 14 Tage). Optional `COOKIE_SECURE=true` für reinen
+  HTTPS-Betrieb.
+* **Passkeys**: WebAuthn/FIDO2 – der Schlüssel verlässt das Gerät nie.
+* **Der Datenbestand** liegt in `data/o-energy.db` (SQLite) auf dem eigenen
+  Rechner; das Refresh-Token des Octopus-Zugangs wird dort abgelegt.
+
+### Was die App ausdrücklich nicht schützt
+
+* **Es gibt genau einen Benutzer.** Es gibt keine Rollen, keine Rechte und keine
+  Mandantenfähigkeit. Wer angemeldet ist, sieht alles.
+* **Ohne `AUTH_PASSWORD_HASH` ist die App offen.** Das ist für den lokalen
+  Betrieb gewollt und wird in der Kopfzeile gewarnt. Für einen Betrieb im Internet
+  (Cloudflare-Tunnel, Portfreigabe) **muss** ein Passwort gesetzt sein, sonst sind
+  Verbrauchsdaten, Konto-, Zählernummer und Adresse für jeden mit der URL
+  sichtbar.
+* **Die Zugangsdaten zur Octopus-API** (E-Mail, Passwort, Access- und
+  Refresh-Token) liegen im Klartext in der `.env` bzw. in der Datenbank. Beides
+  gehört auf den eigenen Rechner – `.env` mit `chmod 600`, Datenbankverzeichnis
+  nicht öffentlich, beides nicht ins Repository (siehe `.gitignore`).
+* **Der Service Worker** cacht die statischen Dateien, aber keine API-Antworten.
+  Die zwischengespeicherte Login-Seite enthält keine Geheimnisse.
+
+### Empfehlungen für den Betrieb im Internet
+
+1. Passwort setzen: `uv run oenergy set-password --write-env`
+2. `COOKIE_SECURE=true` setzen (die App läuft dann ausschließlich über HTTPS)
+3. Passkeys einrichten (Seite *System*) – dann genügt das Gerät
+4. Optional eine zusätzliche Absicherung vor der App (Cloudflare Access,
+   VPN, nginx mit Basic Auth)
+5. `data/` nicht in ein öffentlich erreichbares Verzeichnis legen; Backups
+   enthält sensible Daten
+
+## Kein Secret im Repository
+
+`.env`, `data/`, `probe.json` und `*.db` sind in `.gitignore`. Wer Zugangsdaten
+versehentlich committet hat, sollte sie beim Anbieter widerrufen und das
+Refresh-Token ungültig machen (ein neuer Login erzeugt ein neues Token).
+
+## Gefundene Probleme
+
+Sicherheitsprobleme, die uns gemeldet wurden, werden im
+[CHANGELOG](CHANGELOG.md) unter „Sicherheit“ der jeweiligen Version vermerkt.

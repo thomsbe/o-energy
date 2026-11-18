@@ -22,3 +22,13 @@ data/
 .ruff_cache/
 .mypy_cache/
 probe.json
+
+# IDEs und Betriebssysteme
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Lokale Exporte und Diagnose-Ausgaben
+*.json.gz
+diagnose.json

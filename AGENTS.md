@@ -56,6 +56,9 @@ uv run oenergy serve         # Web-App auf http://127.0.0.1:8000
    nicht von der lokalen `.env` abhängen (in `tests/conftest.py` werden die
    relevanten Variablen explizit gesetzt).
 8. **`CHANGELOG.md` pflegen** (Keep a Changelog), Versionen nach SemVer.
+9. **Jinja: Inhalte außerhalb von `{% block %}` werden nicht gerendert.** Skripte
+   gehören in den `{% block scripts %}` der Basisvorlage – sonst fehlen sie im
+   Browser, ohne Fehler in der Konsole.
 
 ---
 
@@ -72,6 +75,9 @@ uv run oenergy serve         # Web-App auf http://127.0.0.1:8000
 | CLI | `src/oenergy/cli.py` |
 | Oberfläche | `src/oenergy/static/css/app.css`, `static/js/app.js`, `web/templates/` |
 | Anmeldung/Passkeys | `src/oenergy/web/auth.py`, `web/webauthn_routes.py`, `services/webauthn_service.py` |
+| Push-Benachrichtigungen | `src/oenergy/services/push.py`, `web/push_routes.py`, `static/sw.js` |
+| Export/Import | `src/oenergy/services/transfer.py` |
+| PWA (Manifest, Icons, Offline) | `src/oenergy/static/manifest.webmanifest`, `static/icons/`, `static/offline.html`, `scripts/make_icons.py` |
 
 **Nach einer Schema-Änderung immer:** `uv run alembic revision --autogenerate -m "…"`
 und `uv run alembic upgrade head` prüfen.
@@ -103,6 +109,7 @@ uv run pytest --lf                 # nur zuletzt Fehlgeschlagenes
 | `test_transfer.py` | Export/Import, Idempotenz |
 | `test_web.py` | Routen, Partials, Login, Export-Download |
 | `test_webauthn.py` | Passkey-Optionen, Zugriffsschutz |
+| `test_push.py` (in `test_webauthn.py`) | Push-Abonnement, Zustellung |
 
 Fixtures: `tests/conftest.py` → `database`, `session`, `seeded`, `client`.
 Bei Bedarf dort ergänzen statt zu duplizieren.
