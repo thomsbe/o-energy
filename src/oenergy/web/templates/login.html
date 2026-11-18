@@ -89,7 +89,7 @@
         }
         button.disabled = true;
         try {
-          var optionsResponse = await fetch("/api/auth/passkey/login/options?next=" + encodeURIComponent("{{ next }}"), {
+          var optionsResponse = await fetch("/api/auth/passkey/login/options?next=" + encodeURIComponent({{ next | tojson }}), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
           });

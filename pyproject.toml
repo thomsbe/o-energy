@@ -1,6 +1,6 @@
 [project]
 name = "o-energy"
-version = "1.2.0"
+version = "1.5.0"
 description = "Self-hosted dashboard for Octopus Energy Germany (Kraken GraphQL API)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -39,6 +39,11 @@ Changelog = "https://github.com/thomsbe/o-energy/blob/main/CHANGELOG.md"
 
 [project.scripts]
 oenergy = "oenergy.cli:main"
+
+[project.optional-dependencies]
+mcp = [
+    "fastmcp>=4.2.1",
+]
 
 [dependency-groups]
 dev = [

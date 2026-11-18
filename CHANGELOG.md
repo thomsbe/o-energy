@@ -5,12 +5,33 @@ Alle wichtigen Änderungen an o-energy werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [1.5.0] – 2026-11-18
+
+### Hinzugefügt
+
+- **MCP-Schnittstelle (nur lesend)**: FastMCP-Server unter `/mcp`
+  (Streamable HTTP, stateless) im bestehenden Web-Prozess. Eigener Bearer-Token
+  (`MCP_TOKEN`, `oenergy generate-mcp-token --write-env`), eigenes Rate- und
+  Body-Limit; ohne Token antwortet der Pfad mit `401`. Acht Werkzeuge
+  (`status`, `consumption`, `costs`, `prices`, `cheapest_windows`, `price_at`,
+  `monthly_overview`, `account`) und drei Ressourcen (`energy://status`,
+  `energy://today`, `energy://month`). Die Service-Schicht liefert aggregierte
+  Werte ohne Kontonummer, Zähler-/MaLo-Nummer, E-Mail oder Namen; die
+  MCP-Session lässt technisch nur `SELECT` zu. Das Extra `mcp` ist im
+  Docker-Image installiert.
+
+### Geändert
+
+- **MCP-Endpunkt kanonisch ohne Schrägstrich**: `/mcp` ist der Endpunkt;
+  `/mcp/` wird mit `307` (Methode und Rumpf bleiben erhalten) auf `/mcp`
+  umgeleitet. Die Weiterleitung übernimmt `X-Forwarded-Proto` und
+  `X-Forwarded-Host`, sodass hinter Tunnel/Proxy auch im `Location`-Header
+  `https://…/mcp` steht.
 
 ### Sicherheit
 
-Die Ergebnisse eines unabhängigen Sicherheits- und Code-Reviews (siehe
-`REVIEW_1.md` / `REVIEW_1_OK.md`) sind umgesetzt:
+Die Ergebnisse zweier unabhängiger Sicherheits- und Code-Reviews (siehe
+[REVIEW_1.md](REVIEW_1.md) und [REVIEW_2.md](REVIEW_2.md)) sind umgesetzt:
 
 - **Der Service Worker cacht keine authentifizierten Seiten mehr** – vorher
   überlebten Verbrauchs-, Kosten- und Kontodaten die Abmeldung im
@@ -39,6 +60,11 @@ Die Ergebnisse eines unabhängigen Sicherheits- und Code-Reviews (siehe
 - Die **Middleware-Reihenfolge** wurde korrigiert: die SessionMiddleware muss
   ausserhalb der Anmeldeprüfung liegen, sonst sieht diese kein dekodiertes
   Cookie (Regressionstest vorhanden).
+- **Das `next`-Ziel wird im Login-Skript JSON-escaped** eingebettet – ein
+  Backslash oder Zeilenumbruch kann den JavaScript-String nicht mehr
+  aufbrechen (verhinderte bisher die Passkey-Anmeldung).
+- **IPv6-Hosts werden korrekt erkannt**: `[::1]:8000` gilt als lokal,
+  Userinfo-Tricks wie `evil.example@localhost` werden verworfen.
 
 ### Behoben
 
@@ -49,14 +75,6 @@ Die Ergebnisse eines unabhängigen Sicherheits- und Code-Reviews (siehe
 - `/api/health` gibt den Datenbankpfad nicht mehr nach außen.
 - Unbekannte Job-Namen beim manuellen Sync werden mit 400 abgewiesen.
 - Geldbeträge liegen jetzt in ganzzahligen Cent (kein Rundungsdrift).
-
-### Dokumentation
-
-- **AI.md**: wie das Projekt mit KI-Unterstützung entwickelt wurde und welche
-  Leitplanken für Mitwirkende gelten (mit und ohne KI).
-
-### Behoben
-
 - **Die Lieferung der Zählerdaten muss nicht pünktlich sein**: bisher hing die
   Abholung am stündlichen Job und einem Sperrfenster von 60 Minuten – kam die
   Lieferung nach 08:00 Uhr, konnte der Vortag bis zur nächsten vollen Stunde
@@ -65,6 +83,11 @@ Die Ergebnisse eines unabhängigen Sicherheits- und Code-Reviews (siehe
   stündlichen Job zu verlassen.
 - Die Sync-Übersicht nennt die Jobs jetzt verständlich („Preise“, „Zählerdaten“,
   „Tagesabschluss“ …) und erklärt sie in einem Satz darunter.
+
+### Dokumentation
+
+- **AI.md**: wie das Projekt mit KI-Unterstützung entwickelt wurde und welche
+  Leitplanken für Mitwirkende gelten (mit und ohne KI).
 
 ## [1.2.0] – 2026-11-15
 

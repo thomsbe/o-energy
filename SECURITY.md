@@ -33,6 +33,23 @@ erfolgt erst, wenn ein Fix verfügbar ist.
 * **Passkeys**: WebAuthn/FIDO2 – der Schlüssel verlässt das Gerät nie.
 * **Der Datenbestand** liegt in `data/o-energy.db` (SQLite) auf dem eigenen
   Rechner; das Refresh-Token des Octopus-Zugangs wird dort abgelegt.
+* **MCP-Zugang**: eigener Bearer-Token (`MCP_TOKEN`) nur für `/mcp`,
+  zeitkonstanter Vergleich, eigenes Rate- und Body-Limit. Der Zugang ist strikt
+  lesend (Session mit ausschließlich `SELECT`) und liefert keine Kontonummer,
+  Zähler-/MaLo-Nummer, E-Mail-Adresse oder Namen. Web-Passwort und
+  `X-OEnergy-Token` gelten dort nicht – und umgekehrt.
+
+### MCP-Zugang – was er darf
+
+* **Erlaubt:** aggregierte Verbrauchs-, Kosten-, Preis- und Kontodaten lesen
+  (Tarif, Grundpreis, USt, Kontostand) – ohne Adresse, Kontonummer,
+  Zähler-/MaLo-Nummer, E-Mail oder Namen.
+* **Nicht möglich**: einen Sync auslösen, Daten importieren, ändern oder
+  löschen. Die Werkzeuge erhalten eine Session, die nur `SELECT` zulässt
+  (`readonly_session`); ein Schreibversuch bricht mit `ReadOnlyViolation` ab.
+* **Token**: `MCP_TOKEN` steht in der `.env` und ist wie ein Passwort zu
+  behandeln. Bei Verdacht neu erzeugen (`oenergy generate-mcp-token --write-env`)
+  und den Dienst neu starten.
 
 ### Was die App ausdrücklich nicht schützt
 

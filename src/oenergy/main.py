@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from starlette.applications import Starlette
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from oenergy import __version__
 from oenergy.config import get_settings
@@ -19,6 +23,7 @@ from oenergy.web.auth import (
     SecurityHeadersMiddleware,
     ensure_session_secret,
 )
+from oenergy.web.mcp_auth import McpAuthMiddleware, McpPathMiddleware
 from oenergy.web.push_routes import router as push_router
 from oenergy.web.routes import router
 from oenergy.web.webauthn_routes import router as webauthn_router
@@ -62,6 +67,25 @@ def _check_token(database) -> None:
         )
 
 
+def _build_mcp_app(settings):
+    """The MCP ASGI app, or None when the endpoint is not enabled."""
+    if not settings.mcp_token:
+        return None
+    try:
+        from oenergy.mcp_server import build_http_app
+    except ImportError:
+        logger.warning(
+            "MCP_TOKEN is set but the 'mcp' extra is not installed - "
+            "run 'uv sync --extra mcp' (the Docker image includes it)"
+        )
+
+        async def unavailable(_request):
+            return JSONResponse({"error": "MCP support is not installed"}, status_code=503)
+
+        return Starlette(routes=[Route("/{path:path}", unavailable)])
+    return build_http_app(settings)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     setup_logging(
@@ -70,6 +94,7 @@ def create_app() -> FastAPI:
         rotation=settings.log_rotation,
         retention=settings.log_retention,
     )
+    mcp_app = _build_mcp_app(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -79,7 +104,11 @@ def create_app() -> FastAPI:
         _check_token(database)
         start_scheduler(settings)
         try:
-            yield
+            async with contextlib.AsyncExitStack() as stack:
+                if mcp_app is not None:
+                    # FastMCP's session manager must be started as well.
+                    await stack.enter_async_context(mcp_app.lifespan(app))
+                yield
         finally:
             stop_scheduler()
 
@@ -91,6 +120,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.mount("/static", AppStaticFiles(directory=str(STATIC_DIR)), name="static")
+    if mcp_app is not None:
+        # path="/" inside FastMCP, mounted here -> the public path is /mcp
+        app.mount("/mcp", mcp_app)
     app.include_router(router)
     app.include_router(webauthn_router)
     app.include_router(push_router)
@@ -98,8 +130,9 @@ def create_app() -> FastAPI:
     # Reihenfolge der Middleware. Starlette wickelt die zuletzt hinzugefügte
     # Middleware als **innerste** - die Session muss deshalb **ausserhalb**
     # der Anmeldeprüfung liegen, damit dort das Cookie schon dekodiert ist:
-    #   Session -> SecurityHeaders -> BodyLimit -> RequireLogin
+    #   McpPath -> Session -> SecurityHeaders -> BodyLimit -> McpAuth -> RequireLogin
     app.add_middleware(RequireLoginMiddleware, settings=settings)
+    app.add_middleware(McpAuthMiddleware, settings=settings)
     app.add_middleware(BodyLimitMiddleware, max_bytes=256 * 1024)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
@@ -110,6 +143,7 @@ def create_app() -> FastAPI:
         same_site="lax",
         https_only=settings.cookie_secure,
     )
+    app.add_middleware(McpPathMiddleware)
     return app
 
 

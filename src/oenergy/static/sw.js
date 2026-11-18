@@ -2,8 +2,8 @@
  *
  * - Statische Dateien (CSS, JS, Chart.js, Icons) werden zwischengespeichert.
  * - Die API-Daten (/api/...) werden nie gecacht, damit die Anzeige aktuell bleibt.
- * - Für Seiten gilt "network first": online wird immer frisch geladen, offline
- *   kommt die zuletzt gecachte Seite.
+ * - Von den Seiten wird ausschliesslich die Whitelist OFFLINE_PAGES gecacht;
+ *   offline zeigt der Service Worker /static/offline.html.
  */
 const CACHE = "oenergy-v2";
 //: Nur diese Seiten werden zwischengespeichert - sie enthalten keine Daten.

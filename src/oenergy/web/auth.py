@@ -72,6 +72,24 @@ def _collect_headers(raw: list[tuple[bytes, bytes]]) -> dict[str, str]:
     return headers
 
 
+def _hostname(host_header: str | None) -> str:
+    """Hostnamen aus dem Host-Header lesen - inklusive IPv6 in eckigen Klammern.
+
+    ``urlsplit`` wird bewusst nicht verwendet: Es akzeptiert Userinfo
+    (``evil.example@localhost``) und würde damit einen Host-Header durchlassen,
+    der wie ein lokaler Rechner aussieht. Solche Werte werden hier verworfen.
+    """
+    value = (host_header or "").strip().lower()
+    if not value or "@" in value:
+        return ""
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end > 0 else ""
+    if value.count(":") == 1:
+        return value.split(":", 1)[0]
+    return value
+
+
 def is_local_request(scope: dict, host_header: str | None) -> bool:
     """True, wenn die Anfrage direkt an den lokalen Rechner ging.
 
@@ -79,7 +97,7 @@ def is_local_request(scope: dict, host_header: str | None) -> bool:
     Peer-Adresse. Der alleinige Check der Peer-Adresse wäre unsicher, weil ein
     Reverse-Proxy oder ein Tunnel ebenfalls von 127.0.0.1 kommt.
     """
-    host = (host_header or "").split(":")[0].strip().lower()
+    host = _hostname(host_header)
     if host.startswith("::ffff:"):
         host = host[7:]
     if host not in LOCAL_HOSTS:
@@ -223,6 +241,12 @@ class RequireLoginMiddleware:
 
         path = scope.get("path", "")
         if is_public_path(path):
+            await self.app(scope, receive, send)
+            return
+
+        # /mcp has its own bearer token (McpAuthMiddleware) - the web login
+        # must neither redirect nor block it.
+        if path == "/mcp" or path.startswith("/mcp/"):
             await self.app(scope, receive, send)
             return
 

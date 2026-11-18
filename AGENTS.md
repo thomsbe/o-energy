@@ -76,6 +76,7 @@ uv run oenergy serve         # Web-App auf http://127.0.0.1:8000
 | Oberfläche | `src/oenergy/static/css/app.css`, `static/js/app.js`, `web/templates/` |
 | Anmeldung/Passkeys | `src/oenergy/web/auth.py`, `web/webauthn_routes.py`, `services/webauthn_service.py` |
 | Push-Benachrichtigungen | `src/oenergy/services/push.py`, `web/push_routes.py`, `static/sw.js` |
+| MCP (nur lesend) | `src/oenergy/mcp_server.py`, `services/mcp_tools.py`, `web/mcp_auth.py` |
 | Export/Import | `src/oenergy/services/transfer.py` |
 | PWA (Manifest, Icons, Offline) | `src/oenergy/static/manifest.webmanifest`, `static/icons/`, `static/offline.html`, `scripts/make_icons.py` |
 
@@ -110,6 +111,7 @@ uv run pytest --lf                 # nur zuletzt Fehlgeschlagenes
 | `test_web.py` | Routen, Partials, Login, Export-Download |
 | `test_webauthn.py` | Passkey-Optionen, Zugriffsschutz |
 | `test_push.py` (in `test_webauthn.py`) | Push-Abonnement, Zustellung |
+| `test_mcp_tools.py` / `test_mcp_server.py` | MCP-Tools, Maskierung, Read-only-Session, Bearer-Auth |
 
 Fixtures: `tests/conftest.py` → `database`, `session`, `seeded`, `client`.
 Bei Bedarf dort ergänzen statt zu duplizieren.
@@ -219,6 +221,10 @@ docker compose logs -f
   `WEBAUTHN_ORIGIN`/`WEBAUTHN_RP_ID` oder automatisch vom Host abgeleitet.
   **WebAuthn braucht einen sicheren Kontext** (https oder localhost) – über
   `http://homeservices:8000` bietet der Browser keine Passkeys an.
+- MCP: opt-in über `MCP_TOKEN` (`oenergy generate-mcp-token --write-env`),
+  Endpunkt `/mcp` im Web-Prozess. Der Token gilt **nur** dort; der Zugang ist
+  strikt lesend (`readonly_session`, nur `SELECT`) und maskiert Identifikatoren.
+  Das Extra `mcp` ist im Docker-Image installiert (`uv sync --extra mcp`).
 
 Konfiguration komplett in `src/oenergy/config.py`; alle Variablen in
 `.env.example` dokumentiert.

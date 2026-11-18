@@ -9,12 +9,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# dependencies first (cached layer)
+# dependencies first (cached layer); the mcp extra provides /mcp
 COPY pyproject.toml uv.lock README.md LICENSE ./
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project --extra mcp
 
 COPY src ./src
-RUN uv sync --no-dev
+RUN uv sync --no-dev --extra mcp
 
 # the SQLite database lives in a volume
 ENV DB_URL=sqlite:////data/o-energy.db

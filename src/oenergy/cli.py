@@ -346,6 +346,32 @@ def cmd_generate_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_mcp_token(args: argparse.Namespace) -> int:
+    """Erzeugt den Bearer-Token für den MCP-Zugang (/mcp).
+
+    Der MCP-Zugang ist strikt lesend und hat einen eigenen Token - weder das
+    Web-Passwort noch X-OEnergy-Token gelten dort.
+    """
+    import secrets
+
+    from oenergy.services.transfer import write_env_value
+
+    token = secrets.token_urlsafe(32)
+    if args.write_env:
+        target = Path(args.env_file or ".env")
+        write_env_value(target, "MCP_TOKEN", token)
+        print(f"Token in {target} geschrieben (MCP_TOKEN).")
+        print("Danach den Dienst neu starten: docker compose up -d --force-recreate")
+        return 0
+
+    print("Diese Zeile in die .env übernehmen:")
+    print()
+    print(f"MCP_TOKEN={token}")
+    print()
+    print("Oder direkt schreiben lassen: oenergy generate-mcp-token --write-env")
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """Datenbestand als JSON exportieren (für Backups und Umzug)."""
     from oenergy.services.transfer import write_export
@@ -473,6 +499,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_token.add_argument("--env-file", default=".env", help="Zieldatei (Standard: .env)")
     generate_token.set_defaults(func=cmd_generate_token)
+
+    generate_mcp_token = sub.add_parser(
+        "generate-mcp-token", help="create the bearer token for the read-only MCP endpoint"
+    )
+    generate_mcp_token.add_argument(
+        "--write-env", action="store_true", help="den Token direkt in die .env schreiben"
+    )
+    generate_mcp_token.add_argument("--env-file", default=".env", help="Zieldatei (Standard: .env)")
+    generate_mcp_token.set_defaults(func=cmd_generate_mcp_token)
 
     export = sub.add_parser("export", help="export the data as JSON (backup)")
     export.add_argument("--out", default=None, help="Zieldatei (Standard: data/backups/...)")

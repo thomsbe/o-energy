@@ -92,6 +92,36 @@ def set_database(database: Database) -> None:
     _database = database
 
 
+class ReadOnlyViolation(RuntimeError):
+    """A read-only session tried to change data."""
+
+
+@contextlib.contextmanager
+def readonly_session(database: Database) -> Iterator[Session]:
+    """A session that can only read.
+
+    The MCP layer must not be able to change data - even if a tool is
+    implemented incorrectly.  SQLAlchemy hooks reject every statement that is
+    not a ``SELECT`` and every flush that would insert, update or delete a row.
+    """
+    session = database.session()
+
+    @event.listens_for(session, "do_orm_execute")
+    def _only_select(state) -> None:  # type: ignore[no-untyped-def]
+        if not state.is_select:
+            raise ReadOnlyViolation("the MCP session is read-only")
+
+    @event.listens_for(session, "before_flush")
+    def _no_flush(session_, flush_context, instances) -> None:  # type: ignore[no-untyped-def]
+        if session_.new or session_.dirty or session_.deleted:
+            raise ReadOnlyViolation("the MCP session is read-only")
+
+    try:
+        yield session
+    finally:
+        session.close()
+
+
 def get_session() -> Iterator[Session]:
     database = get_database()
     session = database.session()

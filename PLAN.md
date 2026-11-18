@@ -367,11 +367,15 @@ später raus. Keine Fehler in den Sync-Läufen. Die Tageswerte sind konsistent
 
 ---
 
-## 9. Plan: MCP-Schnittstelle (FastMCP) – *noch nicht umgesetzt*
+## 9. Plan: MCP-Schnittstelle (FastMCP) – *umgesetzt*
 
-> **Stand 18.11.2026:** Idee vom Maintainer, hier als Plan festgehalten. Es ist
-> **noch nichts implementiert** – der nächste Schritt ist die Entscheidung
-> (siehe 9.1) und danach die Umsetzung in den Schritten 9.3–9.7.
+> **Stand 18.11.2026:** Idee vom Maintainer, hier als Plan festgehalten.
+> **Umgesetzt am 18.11.2026** – die folgenden Abschnitte dokumentieren die
+> Entscheidungen und die Umsetzung. Abweichung zum ursprünglichen Entwurf:
+> FastMCP wird mit `http_app(path="/")` unter `/mcp` gemountet (nicht
+> `path="/mcp"`, sonst entstünde `/mcp/mcp`). FastMCP 4.x bringt inzwischen
+> Auth-Provider mit; die Absicherung bleibt trotzdem als eigene Middleware
+> umgesetzt, weil sie Rate-Limit und Body-Limit im selben Schritt erledigt.
 
 ### 9.1 Die Idee und meine Bewertung
 
@@ -397,7 +401,7 @@ eine zweite Tür zur vorhandenen.
 | **Aktivierung** | opt-in: ohne gesetzten Token antwortet `/mcp` mit 401 und es wird kein Server gestartet |
 
 Auflagen aus der Sicherheitsperspektive (das Projekt ist inzwischen geprüft,
-siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
+siehe `REVIEW_1.md`/`REVIEW_2.md`):
 
 1. **Der MCP-Server gibt Daten preis, die die Web-Oberfläche schützt.** Er
    braucht daher ein **eigenes, strengeres Auth-Verfahren** – nicht die

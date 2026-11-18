@@ -4,7 +4,7 @@
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blau.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 
-> **Version 1.2.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
+> **Version 1.5.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
 
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
 Kraken-GraphQL-API regelmäßig ab, speichert Verbrauch, Zählerstände, Preise und
@@ -40,6 +40,9 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
   abgefragt wurden, und fragt nur Lücken nach – inklusive automatischer
   Nachlieferung der Zählerdaten. Die Historie wird schrittweise bis zum Ende
   zurückgeholt; ist das Ende erreicht, wird es gemerkt und nicht weiter gefragt.
+* **MCP-Schnittstelle**: optionaler, strikt lesender Zugang für KI-Agenten unter
+  `/mcp` (FastMCP, Streamable HTTP) mit eigenem Bearer-Token – ohne
+  Identifikatoren in den Antworten.
 
 ## Schnellstart (lokal)
 
@@ -200,6 +203,7 @@ Oberfläche (Seite *System* → *Export herunterladen*).
 | `oenergy whoami` | angemeldeten Benutzer, Konto und Tarif anzeigen |
 | `oenergy set-password` | Passwort-Hash für die Anmeldung erzeugen (`--write-env`) |
 | `oenergy generate-token` | Secret-Header für den Anmelde-Bypass erzeugen (`--write-env`) |
+| `oenergy generate-mcp-token` | Bearer-Token für den MCP-Zugang erzeugen (`--write-env`) |
 | `oenergy sync [job\|all]` | Synchronisation ausführen (`account`, `prices`, `readings`, `finalize`, `bills`) |
 | `oenergy diagnose` | Prüfen, welche Daten der Account liefert |
 | `oenergy probe` | Rohantworten der API dumpen |
@@ -290,6 +294,50 @@ der Host als auch die Quelle lokal sind (`localhost`/`127.0.0.1`), kommen ohne
 Anmeldung durch – ein Aufruf über den Cloudflare-Tunnel also **nicht**, weil
 dort der Host die öffentliche Adresse ist.
 
+### MCP-Schnittstelle (nur lesen)
+
+Für KI-Agenten gibt es einen eigenen MCP-Endpunkt unter **`/mcp`**
+(Streamable HTTP, stateless). Er läuft im Web-Prozess, hat aber einen
+**eigenen Bearer-Token** – weder das Web-Passwort noch `X-OEnergy-Token` gelten
+dort. Ohne gesetzten Token antwortet `/mcp` mit `401`.
+
+```bash
+uv run oenergy generate-mcp-token --write-env
+docker compose up -d --force-recreate   # Token aus der .env laden
+```
+
+Der MCP-Zugang ist **strikt lesend**: Er löst keinen Sync aus, ändert keine
+Daten und liest über eine Session, die nur `SELECT` zulässt. Die Antworten
+enthalten keine Kontonummer, Zähler-/MaLo-Nummer, E-Mail-Adresse oder Namen.
+Zeitstempel sind lokale ISO-8601-Werte mit Offset, Preise in ct/kWh, Beträge in
+EUR.
+
+Werkzeuge: `status`, `consumption`, `costs`, `prices`, `cheapest_windows`,
+`price_at`, `monthly_overview`, `account`. Ressourcen: `energy://status`,
+`energy://today`, `energy://month`.
+
+Beispiel für einen MCP-Client (URL je nach Betrieb anpassen):
+
+```json
+{
+  "mcpServers": {
+    "o-energy": {
+      "url": "https://strom.example.de/mcp",
+      "headers": {"Authorization": "Bearer <MCP_TOKEN>"}
+    }
+  }
+}
+```
+
+Der Endpunkt ist kanonisch `/mcp` **ohne** Schrägstrich. `/mcp/` antwortet mit
+`307` auf `/mcp`; dabei werden `X-Forwarded-Proto` und `X-Forwarded-Host`
+ausgewertet, damit hinter Tunnel/Proxy `https` im `Location`-Header steht.
+Streamable HTTP nutzt `POST` (Streaming per SSE in der Antwort); ein reines
+`GET` auf den Endpunkt ist nicht vorgesehen und antwortet mit `405`.
+
+Ohne Docker wird das Extra separat installiert: `uv sync --extra mcp`. Fehlt es,
+antwortet `/mcp` mit `503`; ohne `MCP_TOKEN` mit `401`.
+
 ### Hinter einem Reverse-Proxy oder Tunnel
 
 `uvicorn` wertet `X-Forwarded-Proto` und `X-Forwarded-Host` aus, damit das
@@ -377,6 +425,9 @@ uv run oenergy sync prices --history-days 30   # Börsenpreise für die Historie
 | `SLOT_MINUTES` | `15` | Länge eines Verbrauchsintervalls |
 | `ENERGY_UNIT` | `auto` | `auto`, `kwh` oder `wh` (Zählregister) |
 | `API_MIN_INTERVAL_SECONDS` | `1.2` | Mindestabstand zwischen zwei API-Requests (Rate-Limit) |
+| `MCP_TOKEN` | – | Bearer-Token für `/mcp` (ohne Token gesperrt) |
+| `MCP_RATE_LIMIT_PER_MINUTE` | `120` | Anfragen pro Minute und Herkunft für `/mcp` |
+| `MCP_MAX_BODY_BYTES` | `262144` | Maximale Request-Größe für `/mcp` |
 | `LOG_LEVEL` | `INFO` | Logstufe (`DEBUG`, `INFO`, `WARNING`, …) |
 | `LOG_FILE` | – | zusätzlich in eine Datei schreiben (mit Rotation) |
 | `LOG_ROTATION` / `LOG_RETENTION` | `10 MB` / `14 days` | Rotation der Logdatei |
@@ -432,6 +483,7 @@ src/oenergy/
 ├── static/       # CSS, JS, Icons, PWA (manifest, sw.js), Vendor (htmx, Chart.js)
 ├── jobs.py       # Scheduler
 ├── cli.py        # oenergy serve|sync|login|token-info|whoami|diagnose|probe|seed|reset|jobs
+├── mcp_server.py # FastMCP-Server (Tools/Ressourcen für /mcp, nur lesend)
 └── main.py       # FastAPI-App
 ```
 

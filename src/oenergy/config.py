@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     auth_local_bypass: bool = True  # localhost/127.0.0.1 ohne Anmeldung
     auth_bypass_token: str | None = None  # optionales Secret-Header (X-OEnergy-Token)
 
+    # --- MCP (read-only access for AI agents) -----------------------------
+    # Ohne gesetzten Token bleibt /mcp gesperrt (401).
+    mcp_token: str | None = None
+    mcp_rate_limit_per_minute: int = 120
+    mcp_max_body_bytes: int = 256 * 1024
+
     # --- WebAuthn / Passkey -----------------------------------------------
     webauthn_enabled: bool = True
     webauthn_rp_id: str | None = None  # Hostname (Standard: der Host der Anfrage)

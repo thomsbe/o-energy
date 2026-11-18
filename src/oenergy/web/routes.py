@@ -28,6 +28,7 @@ from oenergy.web.auth import (
     login_is_locked,
     logout,
     redirect_to_login,
+    safe_next,
 )
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
@@ -104,7 +105,7 @@ def page_login(request: Request) -> HTMLResponse:
         request,
         "login.html",
         {
-            "next": request.query_params.get("next", "/"),
+            "next": safe_next(request.query_params.get("next")),
             "error": request.query_params.get("error"),
             "username": settings.auth_username,
         },

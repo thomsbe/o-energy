@@ -1,6 +1,6 @@
 """Tests für die Sicherheitshärtung aus dem unabhängigen Review.
 
-Die Befunde sind in ``REVIEW_1_OK.md`` dokumentiert; hier steht der
+Die Befunde sind in ``REVIEW_1.md``/``REVIEW_2.md`` dokumentiert; hier steht der
 maschinelle Nachweis, dass sie behoben sind.
 """
 
@@ -42,6 +42,25 @@ def test_safe_next_keeps_relative_targets(value: str, expected: str) -> None:
     assert safe_next(value) == expected
 
 
+@pytest.mark.parametrize(
+    ("host_header", "expected"),
+    [
+        ("localhost:8000", True),
+        ("127.0.0.1:8000", True),
+        ("[::1]:8000", True),
+        ("[::ffff:127.0.0.1]:8000", True),
+        ("strom.tbaer.de", False),
+        ("evil.example@localhost", False),
+        ("[::1]@evil.example", False),
+    ],
+)
+def test_local_host_detection_handles_ipv6_and_userinfo(host_header, expected) -> None:
+    from oenergy.web.auth import is_local_request
+
+    scope = {"client": ("::1", 1234)}
+    assert is_local_request(scope, host_header) is expected
+
+
 def test_passkey_options_validate_the_next_target(client, session) -> None:
     """Die Passkey-Login-Route darf kein fremdes Ziel zurückgeben."""
     from oenergy.db.models import WebauthnCredential
@@ -52,6 +71,37 @@ def test_passkey_options_validate_the_next_target(client, session) -> None:
     response = client.post("/api/auth/passkey/login/options?next=https://evil.example/phish")
     assert response.status_code == 200
     assert response.json()["next"] == "/"
+
+
+def _enable_login(monkeypatch) -> None:
+    from oenergy.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_password_hash", "x")
+
+
+def test_login_page_embeds_next_as_json_string(client, monkeypatch) -> None:
+    """Backslashes dürfen den JS-String im Login-Skript nicht beenden."""
+    import json
+
+    _enable_login(monkeypatch)
+    value = "/kosten\\"
+
+    response = client.get("/login", params={"next": value})
+
+    assert response.status_code == 200
+    assert f"encodeURIComponent({json.dumps(value)})" in response.text
+
+
+def test_login_page_rejects_control_characters_in_next(client, monkeypatch) -> None:
+    """Steuerzeichen im next-Ziel werden vor der Ausgabe verworfen."""
+    _enable_login(monkeypatch)
+
+    response = client.get("/login", params={"next": "/\n/x"})
+
+    assert response.status_code == 200
+    assert 'encodeURIComponent("/")' in response.text
 
 
 # ---------------------------------------------------------------------------
