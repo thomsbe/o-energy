@@ -15,7 +15,7 @@ jobs:
     name: Tests und Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: uv einrichten
         uses: astral-sh/setup-uv@v5
@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # die ganze Historie - Geheimnisse landen oft in alten Commits
           fetch-depth: 0
@@ -63,6 +63,6 @@ jobs:
     name: Docker-Image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Image bauen
         run: docker build -t o-energy:ci .
