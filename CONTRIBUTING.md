@@ -7,7 +7,7 @@ PR von Hand gut funktioniert – und die technischen Feinheiten sind in
 ## Setup
 
 ```bash
-git clone https://github.com/<owner>/o-energy.git
+git clone https://github.com/thomsbe/o-energy.git
 cd o-energy
 uv sync
 uv run alembic upgrade head

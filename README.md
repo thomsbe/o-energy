@@ -1,6 +1,6 @@
 # o-energy
 
-[![CI](https://github.com/<owner>/o-energy/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/o-energy/actions/workflows/ci.yml)
+[![CI](https://github.com/thomsbe/o-energy/actions/workflows/ci.yml/badge.svg)](https://github.com/thomsbe/o-energy/actions/workflows/ci.yml)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blau.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 
