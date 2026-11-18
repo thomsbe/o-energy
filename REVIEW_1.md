@@ -1,6 +1,10 @@
 # Review 1 – unabhängiges Sicherheits- und Code-Review
 
-## 2. Befunde
+> Die Befunde wurden am 18.11.2026 ausgewertet und umgesetzt – siehe
+> **[REVIEW_1_OK.md](REVIEW_1_OK.md)**. Das Original (der Prüfauftrag) steht in
+> der Git-Historie.
+
+## Befunde
 
 ### [MITTEL] Service Worker cached authentifizierte Seiten dauerhaft
 
