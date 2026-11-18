@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -48,6 +49,7 @@ class Settings(BaseSettings):
     webauthn_rp_id: str | None = None  # Hostname (Standard: der Host der Anfrage)
     webauthn_rp_name: str = "o-energy"
     webauthn_origin: str | None = None  # z.B. https://strom.example.de
+    webauthn_require_user_verification: bool = True  # PIN/Biometrie bei jedem Login
 
     # --- Logging ----------------------------------------------------------
     log_level: str = "INFO"
@@ -79,6 +81,19 @@ class Settings(BaseSettings):
     # --- Preiseinordnung (Preis-Matrix) -----------------------------------
     price_cheap_limit: float = 26.0  # ct/kWh brutto - bis hierher "günstig"
     price_expensive_limit: float = 40.0  # ct/kWh brutto - ab hier "teuer"
+
+    @field_validator("auth_password_hash", mode="before")
+    @classmethod
+    def _unescape_hash(cls, value: str | None) -> str | None:
+        """Der Compose-escapte Hash ($$argon2id$$…) wird zurückübersetzt.
+
+        Docker Compose ersetzt $$ durch $, im Direktbetrieb (uv run oenergy serve)
+        bleibt der Wert unverändert - ohne diese Normalisierung wäre der Hash
+        dort ungültig und jede Anmeldung würde fehlschlagen.
+        """
+        if isinstance(value, str) and "$$" in value:
+            return value.replace("$$", "$")
+        return value
 
     @property
     def has_credentials(self) -> bool:

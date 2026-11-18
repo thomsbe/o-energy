@@ -205,7 +205,7 @@ def test_standing_charge_comes_from_the_active_agreement(session) -> None:
             meter_id="m1",
             day=today,
             kwh=10.0,
-            energy_cost_cents=500.0,
+            energy_cost_cents=500,
             received_slots=96,
             expected_slots=96,
             is_final=True,

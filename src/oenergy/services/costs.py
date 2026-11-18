@@ -88,10 +88,12 @@ def compute_costs(session: Session, settings: Settings) -> int:
             stat = DailyStat(day=day, meter_id=fallback_meter or "unbekannt")
             session.add(stat)
         stat.kwh = bucket["kwh"]
-        stat.energy_cost_cents = bucket["energy_cost"]
-        standing = gross_standing_ct / days_in_month(day) if gross_standing_ct else 0.0
+        # Geldbeträge werden auf ganze Cent gerundet (die Spalten sind Integer)
+        energy = round(bucket["energy_cost"])
+        standing = round(gross_standing_ct / days_in_month(day)) if gross_standing_ct else 0
+        stat.energy_cost_cents = energy
         stat.standing_cost_cents = standing
-        stat.cost_cents = bucket["energy_cost"] + standing
+        stat.cost_cents = energy + standing
         stat.received_slots = int(bucket["slots"])
         stat.expected_slots = settings.slots_per_day
         stat.updated_at = datetime.utcnow()

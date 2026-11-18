@@ -1,234 +1,409 @@
 # Review 1 – unabhängiges Sicherheits- und Code-Review
 
-> **Anweisung an das prüfende Modell:** Führe die Prüfung aus und **lösche
-> anschließend den gesamten Abschnitt 1** (diesen Block inklusive der
-> Anweisungen). Es soll nur der Abschnitt 2 mit den Befunden zurückbleiben.
-> Danach die Datei **nicht** committen und nicht pushen.
-
----
-
-## 1. Prompt an das prüfende Modell
-
-Du bist ein **unabhängiger Security- und Code-Reviewer** für das Projekt
-**o-energy** (siehe `/opt/o-energy`). Du hast **keinen** Kontext über die
-Entstehung des Codes und urteilst ausschließlich nach dem, was im Repository
-steht.
-
-### 1.1 Was o-energy ist
-
-Eine selbst gehostete Web-App für **Octopus Energy Deutschland** (Tarif *Dynamic
-Octopus*). Sie fragt die GraphQL-API des Anbieters regelmäßig ab, speichert
-Verbrauch, Preise und Kosten in SQLite und zeigt alles in einer FastAPI +
-HTMX + Chart.js-Oberfläche.
-
-* **Stack:** Python 3.12 (uv), FastAPI, Jinja2, HTMX, Chart.js, SQLite/SQLAlchemy 2
-  + Alembic, APScheduler, httpx, loguru, pwdlib (Argon2id), py_webauthn
-  (WebAuthn), pywebpush, uv/Docker-Compose, GitHub Actions
-* **Betrieb:** Docker-Compose (Container läuft als nicht-root, uid/gid 1000),
-  SQLite-Datei in einem Volume, davor ein **Cloudflare-Tunnel** (HTTPS) mit
-  **genau einem** Benutzer
-* **Anmeldung:** Passwort (Argon2id) **oder** Passkey (WebAuthn/FIDO2),
-  Sitzung in einem signierten Cookie; optionaler Bypass für lokale Tests
-* **Daten:** Verbrauchsintervalle (15 min) vom Smart-Meter-Gateway, Preise
-  (EPEX + Basiskomponente), Rechnungen, Tarifsdaten
-* **Doku:** `README.md`, `AGENTS.md` (Arbeitsanleitung), `AI.md`, `SECURITY.md`,
-  `CONTRIBUTING.md`, `PLAN.md`, `CHANGELOG.md`
-
-### 1.2 Harte Regeln für diese Prüfung
-
-1. **Nichts ändern.** Der einzige Schreibzugriff ist `REVIEW_1.md`. Keine
-   Änderungen an Quellcode, Tests, Config, `.env`, `data/`, `.github/`, keinen
-   Commit, kein Push, kein `git checkout`/`reset`, keine neuen Branches.
-2. **Keine Geheimnisse verwenden.** Du bist ein externer Prüfer: Nutze
-   **ausschließlich** Daten, die auch ein Angreifer von außen haben könnte.
-   Verboten sind: `.env` (enthält E-Mail, Passwort-Hash, Bypass-Token,
-   WebAuthn-Origin), `data/o-energy.db` und `data/backups/*` (enthält
-   Access-/Refresh-Token, Kontonummer, Adresse, MaLo-, Zähler- und
-   Seriennummern, push-Abonnements), das SSH-Verzeichnis, gespeicherte
-   Credentials jeder Art. **Kein** Zugriff auf die Octopus-API mit echten
-   Zugangsdaten, keine echten Push-Nachrichten, kein Eingriff in die laufende
-   Instanz (`docker compose` **nicht** anfassen, keinen Container starten oder
-   stoppen).
-3. **Für dynamische Tests eine eigene, isolierte Instanz** verwenden, z. B.:
-   ```bash
-   mkdir -p /tmp/review && cd /tmp/review
-   git clone /opt/o-energy o-energy && cd o-energy
-   uv sync
-   uv run alembic upgrade head
-   uv run oenergy seed --days 30          # Demo-Daten, keine echten Daten
-   uv run oenergy serve --port 8999       # eigener Port, eigene DB
-   ```
-   Für Tests der Anmeldung in der **eigenen** Instanz ein Passwort setzen
-   (`uv run oenergy set-password --write-env` **nur dort**) und mit eigenen
-   Testpasswörtern arbeiten.
-   Die öffentlich erreichbare Instanz (`https://strom.tbaer.de`) darf **ausschließlich
-   unauthentifiziert** geprüft werden: also Anonymous-Zugriffe, Umgehung der
-   Anmeldung, Header-Handling, Fehlerverhalten. **Keine** Loginversuche mit
-   echten Zugangsdaten, keine Abrufe fremder Daten, keine Änderungen an der
-   laufenden Instanz.
-
-4. **Kein Blindvertrauen in die Doku.** Prüfe, ob `README.md`, `AGENTS.md` und
-   `SECURITY.md` das tatsächliche Verhalten korrekt beschreiben – Widersprüche
-   zwischen Doku und Code sind ein Befund (`INFO`, ggf. `MEDIUM`).
-5. **Nachvollziehbar arbeiten.** Jeder Befund nennt die betroffene Stelle
-   (`datei.py:Zeile`), die konkrete Beobachtung und eine Begründung. Vermutungen
-   ohne Beleg als solche kennzeichnen und mit dem Aufwand der Prüfung
-   versehen.
-
-### 1.3 Zu prüfende Bereiche
-
-**A. Authentifizierung und Sitzung**
-* Umgehung der Anmeldung: `AUTH_LOCAL_BYPASS` (Host **und** Peer-Adresse
-  lokal?), `AUTH_BYPASS_TOKEN` (Vergleich zeitkonstant? Header-Name
-  case-insensitiv? Mehrfach-Header?), öffentliche Pfade
-* Session-Cookie: `HttpOnly`, `Secure`, `SameSite`, `Path`, Ablauf, Secret
-  (DB vs. Konfiguration), Fixierung, Abmeldung, Wiederverwendung nach Logout
-* Passkeys (WebAuthn): Challenge-Verwaltung, Origin/RP-ID-Prüfung, Registrierung
-  nur für Angemeldete, Löschung, Umgang mit ungültigen Antworten
-* Anmeldefehler: Timing, Fehlermeldungen, Enumeration, Sperren/Rate-Limit
-* `next`-Parameter nach dem Login: offene Weiterleitung? (prüfen: `//evil.example`)
-
-**B. Autorisierung und Datenabfluss**
-* Sind **alle** Routen geschützt? auch `/api/*`, `/partials/*`, `/api/export/*`,
-  `/api/push/*`, `/api/auth/passkeys`? Welche sind bewusst öffentlich und ist das
-  dokumentiert?
-* Können ohne Session Daten abgerufen werden (Verbrauch, Preise, Konto,
-  Export)? Prüfe die API-Endpunkte einzeln per `curl`.
-* Werden fremde Daten (anderer Zähler/Konto) durch fehlende Mandantenprüfung
-  preisgegeben? (`meter_id`, `account_number`, `agreement_id` aus der URL oder
-  dem Query-String?)
-
-**C. Weboberfläche (XSS, CSRF, Injection)**
-* Jinja2-Autoescaping: alle Nutzer- oder API-gesteuerten Werte in Templates
-  (`|safe`, `Markup`, `{% autoescape false %}`)? Besonders: Fehlermeldungen,
-  Job-Meldungen, Zähler-/Kontonummern, Labels aus der API
-* CSRF: stateändernde Endpunkte (`POST`, `DELETE`) ohne CSRF-Token bei
-  Cookie-basierter Authentifizierung; `SameSite=Lax` schützt nur bei
-  GET-Navigation – sind die Endpunkte für „simple requests“ (form-encoded POST)
-  ausnutzbar?
-* Header-Injection, Path-Traversal (Dateipfade aus der URL), offene Redirects
-* JSON-Endpunkte: kein `Content-Type`-Sniffing, keine Information Leakage
-  (Stacktraces, SQL-Fehler) – `debug=True` irgendwo?
-
-**D. Datenbank und SQL**
-* SQL-Injektion (auch in dynamischen Filtersortierungen/ORDER BY)
-* SQLite: `PRAGMA foreign_keys` aktiv? Indizes? Transaktionen/Wrap-Around bei
-  den Bulk-Inserts (`CHUNK_SIZE`), `on_conflict_do_update` korrekt?
-* Fehlende Constraints (unique), `nullable` bei Pflichtfeldern, Datentypen
-  (Geldbeträge als float → Rundungsdrift!)
-
-**E. API-Client (externe API)**
-* Timeout, Retry, Backoff → kann ein Angreifer die API über die App lahmlegen
-  (Amplification)? Unbegrenzte Retries, keine Circuit-Breaker
-* SSRF: ist `API_URL` aus der Konfiguration zur Laufzeit überschreibbar? Werden
-  Antworten der API ungeprüft übernommen (Typen, Größen)?
-* Header-/Credential-Leaks in Fehlermeldungen oder Logs (Authorization-Header,
-  Tokens, E-Mail)
-
-**F. Secrets und Logs**
-* Werden Passwörter, Tokens, Hashes oder personenbezogene Daten geloggt?
-  (`logger`-Aufrufe, Fehlerpfade, `print`, Tracebacks)
-* `.env`-Handling: Dateirechte, Backups, `.gitignore` vollständig? Historie auf
-  versehentlich committete Geheimnisse prüfen (`git log -p`, `git grep`)
-* Umgang mit dem Octopus-Refresh-Token in der Datenbank (Klartext)
-
-**G. Docker und Betrieb**
-* Läuft der Container wirklich als nicht-root? Schreibt er in ein Volume, das
-  dem Host-Benutzer gehört? Rechte im Image (`WORKDIR`, `USER`, `ENTRYPOINT`)
-* `docker-compose.yml`: Secrets im Klartext? `privileged`, `network_mode: host`,
-  ungeprüfte Portfreigaben? Healthcheck-Semantik?
-* Backup-Skript: Werden die Backups mit restriktiven Rechten erzeugt, werden
-  sie im Repo abgelegt, ist die Wiederherstellung getestet?
-
-**H. PWA, Service Worker, Push**
-* Cacht der Service Worker **sensible** Seiten oder API-Antworten? (Ein
-  gecachtes Dashboard auf einem gemeinsam genutzten Gerät ist ein Datenleck.)
-* `Cache-Control`-Header der App: sind die Antworten als privat markiert?
-  (`Cache-Control: no-store` für Seiten mit personenbezogenen Daten?)
-* Push: Wer darf ein Abo anlegen (Auth?), sind die Endpunkte (FCM/Mozilla)
-  SSRF-Risiken, werden abgelaufene Abonnements bereinigt?
-
-**I. Export/Import**
-* JSON-Deserialisierung: untrusted JSON → Objekt-Erzeugung (`pickle`? `eval`?)
-* Import: Könnte ein Angreifer damit beliebige Daten einspielen (fremde
-  `meter_id`, `agreement_id`, Preise manipulieren, DoS durch riesige Dateien)?
-* Pfadbehandlung beim Export (Zielpfad aus der CLI – Path-Traversal?)
-
-**J. CLI**
-* `oenergy import`/`export`/`reset --yes`: destruktive Befehle ohne Rückfrage?
-  Argument-Injection? Kommandos aus Benutzereingaben?
-
-**K. Abhängigkeiten und Supply Chain**
-* Bekannte CVEs in den direkten Abhängigkeiten (`pip-audit`/`osv-scanner`/`uv` –
-  die Versionen aus `uv.lock` prüfen)
-* Unnötige oder riskante Abhängigkeiten, unpinnte Versionen, Lockfile-Hygiene
-* `scripts/make_icons.py` (Pillow) – nur Entwicklungswerkzeug?
-
-**L. CI/CD und GitHub**
-* Workflow-Berechtigungen (`permissions:`), `pull_request_target`,
-  Secrets im Workflow, ungeprüftes `uses:` von Dritten, `on:`-Trigger
-* `dependabot.yml`, `CODEOWNERS`, Ruleset – sind die Guardrails wirksam?
-* Release-Prozess: Signatur, Artefakte, Tag-Schemata
-
-**M. Dokumentation und Konsistenz**
-* Stimmen README/AGENTS/SECURITY mit dem Code überein? Behauptet die Doku
-  Sicherheitsgarantien, die der Code nicht hält?
-* Ist die Bedienungsanleitung (Schnellstart, `.env`, Docker, Backup) korrekt und
-  vollständig? Verweist irgendetwas ins Leere (Dateien, Endpunkte, Variablen)?
-* Widersprüche zu `AGENTS.md` (z. B. Behauptungen über `services/` ohne
-  HTTP-Zugriff, Pfade, Testanzahlen)
-
-### 1.4 Was du tun sollst
-
-1. Lies zuerst `AGENTS.md`, `SECURITY.md` und `README.md`, dann den Code.
-2. Prüfe statisch (Quellcode, Konfiguration, CI, Doku) und – wo sinnvoll –
-   dynamisch an einer **isolierten** Instanz mit Demo-Daten (siehe 1.2.3).
-3. Versuche, die App zu brechen: Zugriff ohne Anmeldung, fremde Daten,
-   Manipulation über die API, Umgehung der Preis-/Kostenlogik, DoS, XSS,
-   Path-Traversal, Token-Leaks, Fehlkonfigurationen.
-4. Notiere **jeden** Befund in Abschnitt 2 dieses Dokuments.
-5. Lösche zum Schluss diesen gesamten Abschnitt 1, sodass nur die Befunde
-   bleiben. Nichts committen, nichts pushen.
-
-### 1.5 Format der Befunde (Abschnitt 2)
-
-Pro Befund:
-
-```
-### [SCHWERE] Kurztitel
-* **Datei:** `pfad/datei.py:42` (ggf. weitere Stellen)
-* **Was:** konkrete Beobachtung, wie lässt sie sich auslösen
-* **Warum relevant:** mögliche Auswirkung (Datenabfluss, Rechteausweitung, …)
-* **Einstufung:** Begründung (nicht nur Etikett) – ggf. CVSS-ähnliche Einschätzung
-* **Vorschlag:** konkrete, umsetzbare Behebung (welche Datei, was ändern)
-* **Aufwand:** klein / mittel / groß
-* **Sicherheit:** belegt / wahrscheinlich / Verdacht (bitte unterscheiden!)
-```
-
-**Klassifikation:**
-
-| Stufe | Bedeutung |
-|---|---|
-| `KRITISCH` | Datenabfluss, Vollzugriff auf fremde Daten, Auth-Umgehung, RCE |
-| `HOCH` | Privilegieneskalation, dauerhafte Verfügbarkeitsstörung, sensible Daten im Log |
-| `MITTEL` | verlangt Voraussetzungen (z. B. Angreifer ist eingeloggt) |
-| `NIEDRIG` | Härtung, Defense in Depth, Inkonsistenz in der Doku |
-| `INFO` | Beobachtung, Bestätigung eines guten Zustands, Verbesserungsvorschlag |
-
-Zusätzlich am Ende von Abschnitt 2:
-
-* **Zusammenfassung** (Anzahl je Schwere, die drei wichtigsten Befunde)
-* **Was ist ausdrücklich in Ordnung** (mit Beleg) – nicht nur Mängel auflisten
-* **Getestet wurde** (welche Kommandos, welche Seiten, was nicht prüfbar war)
-
-### 1.6 Wenn du etwas ändern musst
-
-Du darfst **nichts** ändern. Wenn eine Änderung unbedingt nötig wäre, um
-weiterzuprüfen (z. B. ein fehlendes Testpaket), beschreibe sie in einem
-Abschnitt **„Blocker“** am Ende von Abschnitt 2 – statt sie auszuführen.
-
----
-
 ## 2. Befunde
 
-*(Hierhin: Das prüfende Modell trägt seine Befunde ein und löscht Abschnitt 1.)*
+### [MITTEL] Service Worker cached authentifizierte Seiten dauerhaft
+
+* **Datei:** `src/oenergy/static/sw.js:53-63` (fetch-Handler, Zweig `request.mode === "navigate"`); Widerspruch zur Doku: `SECURITY.md:50-51`
+* **Was:** Jede erfolgreiche HTML-Navigation wird als Klone in den Cache Storage gelegt –
+  ungefiltert auch `/`, `/verbrauch`, `/kosten`, `/system`. Der Eintrag bleibt bis zum
+  Wechsel des Cache-Namens (`oenergy-v2`) erhalten; die Abmeldung (`src/oenergy/web/auth.py:170`,
+  `request.session.clear()`) löscht ihn nicht. Dynamisch geprüft am Code-Pfad; im Browser
+  nachvollziehbar via DevTools → Application → Cache Storage oder durch Offline-Start der PWA.
+* **Warum relevant:** Die Seiten enthalten Verbrauchs-, Kosten-, Konto-, Zähler- und
+  MaLo-Nummern sowie die Octopus-E-Mail. Sie überdauern die Abmeldung und bleiben auf
+  gemeinsam genutzten Geräten/Profilen lesbar (Offline-Fall der PWA zeigt die letzte
+  Ansicht des Vornutzers). `SECURITY.md` behauptet das Gegenteil („cacht die statischen
+  Dateien … die zwischengespeicherte Login-Seite enthält keine Geheimnisse“) – die Doku
+  hält hier nicht, was der Code tut.
+* **Einstufung:** Kein Remote-Angriff nötig, sondern lokaler Zugriff auf das
+  Browser-Profil bzw. ein Szenario mit gemeinsam genutztem Profil; data outlives logout
+  widerspricht der dokumentierten Erwartung → MITTEL, nicht HOCH.
+* **Vorschlag:** In `sw.js` das Navigations-Caching auf eine Whitelist beschränken
+  (`/login`, `/offline.html`); Offline-Fallback auf `offline.html` statt der zuletzt
+  besuchten Seite. Optional beim Abmelden den Seiten-Cache leeren.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Code-Pfad eindeutig; Header-Verhalten der App separat getestet)
+
+### [MITTEL] Offene Weiterleitung in der Passkey-Anmeldung (`next` unvalidiert)
+
+* **Datei:** `src/oenergy/web/routes.py:45` (`"next": request.query_params.get("next", "/")` –
+  ungeprüft in JSON), `src/oenergy/web/templates/login.html:92` (fetch) und `login.html:133`
+  (`window.location.href = payload.next || "/"`). Gegenstück mit validierung:
+  `src/oenergy/web/auth.py:182-186`.
+* **Was:** Die Passkey-Options-Route gibt den `next`-Parameter ungeprüft zurück; nach
+  erfolgreicher Passkey-Verifikation übernimmt das Login-Skript den Wert als Ziel-URL.
+  Belegt an der isolierten Instanz (Dummy-Credential in der Test-DB):
+  `POST /api/auth/passkey/login/options?next=https://evil.example/phish` →
+  `"next": "https://evil.example/phish"`; ebenso `//evil.example`. Das Passwort-Login
+  blockt dieselben Werte (belegt: alle Varianten einschließlich Backslash → `/` bzw.
+  `/%5C…`, kein Redirect).
+* **Warum relevant:** Ein Angreifer versendet den Link
+  `https://strom.tbaer.de/login?next=https://evil.example/phish`. Das Opfer meldet sich
+  mit seinem echten Passkey an und landet unmittelbar danach auf der Angreiferseite –
+  klassisches Post-Auth-Phishing (CWE-601).
+* **Einstufung:** Internet-erreichbarer Anmeldeprozess, kein Datenabfluss, Opfer-Interaktion
+  erforderlich → MITTEL.
+* **Vorschlag:** `next` vor der Rückgabe mit derselben Regel wie `redirect_to_login`
+  prüfen (relativ, mit `/` beginnend, ohne `//`; idealerweise `urljoin`-basiert) – im
+  Service oder in der Route. Nebenbei: `{{ next }}` steht roh im JS-String-Kontext
+  (`login.html:92`); Backslashes/Zeilenümbrüche erzeugen einen Syntax-Fehler und legen die
+  Passkey-Anmeldung lahm (DoS über präparierten Link, kein XSS – Anführungszeichen werden
+  HTML-escaped und im `<script>` nicht dekodiert).
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Echo dynamisch nachgestellt; Redirect-Ziel code-belegt)
+
+### [NIEDRIG] Keine Begrenzung der Request-Größe auf öffentlichen Endpunkten
+
+* **Datei:** `src/oenergy/web/webauthn_routes.py:51` (`await request.json()` vor
+  Challenge-Prüfung), `src/oenergy/web/routes.py:115` (`request.form()` bei `/login`),
+  `src/oenergy/web/push_routes.py:29,40`
+* **Was:** Ein 20-MB-JSON an den **unauthentifizierten** Endpunkt
+  `/api/auth/passkey/login/verify` wurde vollständig gelesen und geparst (Antwort 400
+  erst nach dem Parsen, 0,1 s lokal). Nirgends im Stack existiert ein Limit
+  (uvicorn/Starlette setzen standardmäßig keins).
+* **Warum relevant:** Anonymer Memory-DoS: Der Cloudflare-Tunnel begrenzt Requests auf
+  ~100 MB, aber der direkt veröffentlichte Port (`docker-compose.yml:17`, `8000:8000`)
+  ist unbegrenzt; parallele große Bodies bedienen einen einzigen Uvicorn-Worker und
+  können kleine Heimserver in Speichernot bringen.
+* **Einstufung:** Verfügbarkeitsstörung ohne Rechteausweitung, braucht Durchhaltewillen
+  des Angreifers → NIEDRIG.
+* **Vorschlag:** Middleware mit Body-Limit (JSON z. B. 64 KB, Formular 4 KB) oder
+  frühzeitiger Content-Length-Check; als Zweitlinie `docker-compose.yml` auf
+  `127.0.0.1:8000:8000` beschränken, wenn der Tunnel genutzt wird.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [NIEDRIG] Anmeldeversuche ohne Rate-Limit oder Sperre
+
+* **Datei:** `src/oenergy/web/routes.py:112-120`
+* **Was:** 10 schnelle Fehlanmeldungen → 10 × 303 ohne Verzögerung, Sperrfrist oder
+  Zähler (belegt). Einziges Tempo-Argument ist die Argon2id-Kosten (~50–100 ms je
+  Versuch).
+* **Warum relevant:** Brute-Force über den Tunnel bleibt bei schwachem Passwort
+  durchhaltbar; ein WAF/Rate-Limit gibt es auf der Cloudflare-Strecke nicht
+  automatisch.
+* **Einstufung:** NIEDRIG – Argon2id plus HTTPS und ein starkes Passwort senken das
+  Risiko stark, härtungsbedürftig bleibt es.
+* **Vorschlag:** Fehlschlag-Zähler mit ansteigender Verzögerung (prozessweit oder nach
+  IP – hinter dem Tunnel nur eingeschränkt wirksam), Warnung im Log, Hinweis auf
+  Passwörter ≥ 12 Zeichen in README/SECURITY.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [NIEDRIG] Abmeldung invalideert die Sitzung nicht serverseitig
+
+* **Datei:** `src/oenergy/web/auth.py:170-172` (`logout` → nur `request.session.clear()`)
+* **Was:** Die Sitzung ist ein signiertes, selbsttragendes Cookie; nach `GET /logout`
+  akzeptiert der Server den alten Cookie-Wert weiterhin (belegt: alte Cookie-Zeile nach
+  Logout → HTTP 200). Kein serverseitiger Speicher, das Session-Secret bleibt stabil.
+* **Warum relevant:** Ein kopierter/exfiltrierter Cookie-Wert bleibt bis zu 14 Tage
+  nutzbar, obwohl der Nutzer „abgemeldet“ hat – Logout erweckt den Eindruck einer
+  Sperrung, die nicht stattfindet.
+* **Einstufung:** Missbrauch setzt einen bereits abgegriffenen Cookie voraus (kein
+  XSS-Vektor gefunden, Autoescaping aktiv) → NIEDRIG.
+* **Vorschlag:** Verhalten in SECURITY.md dokumentieren; optional kürzeres
+  `SESSION_MAX_AGE_DAYS` für shared Devices oder Sitzungs-Epoche in der DB
+  (Password-Wechsel rotiert). Ohne echtes Mehrbenutzer-Risiko keine höhere Dringlichkeit.
+* **Aufwand:** klein bis mittel
+* **Sicherheit:** belegt
+
+### [NIEDRIG] Sensible Dateien mit 0644: Datenbank, WAL, Backups, Log
+
+* **Datei:** `data/o-energy.db`, `data/o-energy.db-wal`, `data/o-energy.db-shm`
+  (belegt: 644), `data/backups/*` (644/664, erzeugt von `scripts/backup.sh` ohne
+  `umask`), `data/logs/o-energy.log` (644); Randfall `src/oenergy/services/account.py:27`
+  loggt die Octopus-E-Mail.
+* **Was:** In diesen Dateien liegen Access-/Refresh-Token (Tabelle `tokens`), der private
+  VAPID-Schlüssel (`app_settings`), Konto-, Zähler- und MaLo-Nummern. Jedes lokale Konto
+  und jeder unprivilegierte Prozess kann sie lesen – ohne `.env` anfassen zu müssen.
+* **Warum relevant:** Auf Mehrbenutzer-Hosts (oder nach Kompromittierung eines anderen
+  Dienstes mit niederen Rechten) ist der Octopus-Zugang direkt lesbar. `SECURITY.md:48`
+  empfiehlt `chmod 600` nur für die `.env` und verschweigt DB/Backups/Log.
+* **Einstufung:** Lokale Voraussetzung nötig, kein Remote-Weg → NIEDRIG.
+* **Vorschlag:** `backup.sh`: `umask 077` und `chmod 600` nach dem Schreiben; App:
+  nach der ersten DB-Erstellung `chmod 600` (z. B. in `db/base.py` beim
+  `resolve_db_path`); Log-Datei unter restriktivem umask anlegen; Empfehlung in
+  SECURITY.md ergänzen.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Dateirechte)
+
+### [NIEDRIG] Fehlende Security-/Cache-Header auf HTML- und JSON-Antworten
+
+* **Datei:** `src/oenergy/main.py` (keine Header-Middleware); belegt an der isolierten
+  Instanz **und** produktiv (`https://strom.tbaer.de/login`): kein `Cache-Control`, kein
+  `X-Content-Type-Options`, keine CSP / `X-Frame-Options`, keine `Referrer-Policy`.
+* **Warum relevant:** (a) Authentifizierte Seiten sind heuristisch cachebar und werden –
+  zusätzlich zum SW-Befund – vom Browser ohne `no-store` behandelt; (b) Clickjacking auf
+  interaktiven Seiten bleibt möglich (`/actions/sync`-Knöpfe, `/logout` als GET); (c)
+  `nosniff` fehlt als Basis-Härtung. Cloudflare cached HTML nicht (belegt:
+  `cf-cache-status: DYNAMIC`), daher kein akuter Abfluss über den CDN.
+* **Einstufung:** Defense in Depth → NIEDRIG.
+* **Vorschlag:** Middleware, die für authentifizierte Antworten
+  `Cache-Control: no-store`, global `X-Content-Type-Options: nosniff` und
+  `X-Frame-Options: DENY` (bzw. CSP `frame-ancestors 'self'`) setzt; `/logout` auf POST
+  umstellen oder per Header absichern.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [NIEDRIG] Bypass-Token: Vergleich nicht zeitkonstant, Doppel-Header: letzter gewinnt
+
+* **Datei:** `src/oenergy/web/auth.py:113-118`
+* **Was:** Der Secret-Header wird mit `==` verglichen statt `secrets.compare_digest`.
+  Bei mehreren `X-OEnergy-Token`-Headern gewinnt der **letzte** (belegt in beiden
+  Reihenfolgen; Ursache: `dict(headers)` überschreibt). Header-Namen werden korrekt
+  case-insensitiv behandelt (ASGI normalisiert).
+* **Warum relevant:** Standard-Anforderung an Secret-Vergleiche; netzwerkseitiges
+  Timing ist praktisch nicht auswertbar (Nanosekunden im Jitter), der Befund bleibt
+  rechnerisch Härtung. Das Doppel-Header-Verhalten ist selbst nicht ausnutzbar, ohne
+  das Token zu kennen.
+* **Einstufung:** NIEDRIG (Härtung), Ausnutzbarkeit: Verdacht/theoretisch.
+* **Vorschlag:** `secrets.compare_digest(token, header_value)`; erste Header-Instanz
+  verwenden oder Duplikate zurückweisen.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Verhalten), theoretisch (Angriff)
+
+### [NIEDRIG] `set-password` schreibt immer den Compose-escapten Hash – Direktbetrieb loggt dann niemanden ein
+
+* **Datei:** `src/oenergy/cli.py:295-316` (`cmd_set_password`, Ausgabe **und**
+  `--write-env`), `src/oenergy/services/transfer.py:362` (`$$`-Escape); Doku
+  `README.md:224-239` behandelt nur den Compose-Fall.
+* **Was:** Erzeugte Hashes erscheinen immer als `$$argon2id$$…`. Docker Compose
+  interpoliert `$$`→`$` (funktioniert); bei direktem Betrieb mit `uv run oenergy serve`
+  liest pydantic-settings den Wert roh aus der dotenv → ungültiges Hash-Format →
+  **jede** Anmeldung schlägt fehl (belegt an der isolierten Instanz:
+  `verify_password` False, `/login` → `error=1`). Keine Warnung in Ausgabe oder
+  README für den Nicht-Compose-Pfad.
+* **Warum relevant:** Betreiber sperrt sich aus; naheliegende „Reparatur“ wäre, den
+  Hash wieder zu entfernen – dann läuft die App **offen im Internet**. Stilles
+  Fehlverhalten mit sicherheitskritischer Fehlreaktion.
+* **Einstufung:** NIEDRIG (Konfigurations-Fußangel mit dokumentiertem Ausweg).
+* **Vorschlag:** Beide Formen ausgeben (roh für dotenv, `$$` für Compose) **oder**
+  einen Normalisierungs-Validator in `Settings` (`$$`→`$` beim Laden); README-Absatz
+  „Betrieb ohne Docker“ ergänzen.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (an der Testinstanz nachgestellt)
+
+### [NIEDRIG] Uvicorn ohne Proxy-Header hinter dem Tunnel: WebAuthn-Origin fällt auf `http://` zurück
+
+* **Datei:** `src/oenergy/cli.py:29-35` (`uvicorn.run` ohne `proxy_headers`),
+  `src/oenergy/services/webauthn_service.py:57-67` (`context_for` leitet Origin/RP-ID
+  aus `request.base_url` ab, wenn `WEBAUTHN_ORIGIN`/`WEBAUTHN_RP_ID` fehlen);
+  belegtes Echo: Options-Request mit `Host: evil.example` → `rpId: evil.example`.
+* **Was:** Hinter cloudflared sieht die App Schema `http` und Client `127.0.0.1`.
+  Ohne konfigurierte Origin wird der WebAuthn-Origin `http://strom.tbaer.de`, während
+  der Browser `https://…` meldet → Passkey-Login schlägt fehl. `AGENTS.md` §7
+  („automatisch vom Host abgeleitet“) beschreibt das unzureichend. Das ungeprüfte
+  Host-Echo auf dem öffentlichen Options-Endpunkt ist für sich harmlos (der Browser
+  erzwingt die RP-ID-Konsistenz), belegt aber die Header-Abhängigkeit.
+* **Warum relevant:** Konfigurationsrisiko: Passkeys brechen still → Nutzer bleibt auf
+  Passwort-Login beschränkt; Zugriffs-Log der App zeigt nur 127.0.0.1 (keine
+  Angreifer-IPs für Forensik).
+* **Einstufung:** NIEDRIG (funktional/config; Passkey-Versagen „wahrscheinlich“, nicht
+  im echten Browser vollzogen).
+* **Vorschlag:** `serve` mit `--proxy-headers` und `--forwarded-allow-ips` starten oder
+  `WEBAUTHN_ORIGIN`/`WEBAUTHN_RP_ID` als Pflicht hinter dem Tunnel dokumentieren.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Echo, uvicorn-Aufruf); Versager-Modus wahrscheinlich
+
+### [NIEDRIG] CI: Third-Party-Actions nach mutablem Tag gepinnt, Jobs teils ohne `permissions`
+
+* **Datei:** `.github/workflows/ci.yml` – `uses:` überwiegend `@v7`/`@v2` (inkl.
+  `gitleaks/gitleaks-action@v2`); nur der Job `secrets` setzt `permissions:
+  contents: read`, `test` und `docker` haben keinen Block.
+* **Was:** Tags sind veränderbar – ein kompromittiertes Action-Repository läuft mit den
+  Rechten des Standard-Tokens. Dependabot aktualisiert Actions monatlich (vorhanden ✓),
+  ersetzt aber keine SHA-Pinnsung.
+* **Warum relevant:** Supply-Chain-Basismaßnahme; Schadensfall unwahrscheinlich, Wirkung
+  hoch (Repo-Kontrolle).
+* **Einstufung:** NIEDRIG.
+* **Vorschlag:** Für alle Jobs `permissions: contents: read` setzen; Third-Party-Actions
+  auf Committ-SHA pinnen (z. B. gitleaks), ersteigene auf Versions-Tag belastbar.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Manifest)
+
+### [INFO] Push-Abonnement: Server POSTet an beliebige URLs (nur für Angemeldete)
+
+* **Datei:** `src/oenergy/services/push.py` (`subscribe`/`send`), `web/push_routes.py`
+* **Was:** Belegt: Abonnement mit `endpoint=http://127.0.0.1:8998/push-target` erzeugt,
+  `/api/push/test` löste einen POST des Servers auf den internen Listener aus
+  (`POST /push-target aes128gcm len 199`). Unauthentifiziert: 401 (belegt).
+* **Warum relevant / Einstufung:** Im Single-User-Modell kann nur der Eigentümer das
+  auslösen, der den Container ohnehin kontrolliert → INFO. Erst nach Account-Takeover
+  wird die App zum Sondenwerkzeug ins interne Netz.
+* **Vorschlag:** Optional: Endpoint auf `https://` und bekannte Push-Domains (FCM,
+  Mozilla autopush) beschränken; fehlgeschlagene Abonnements werden bereits gezählt
+  und bereinigt (`failures`-Zähler vorhanden).
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [INFO] `/api/health` verrät öffentlich den Datenbank-URL-String
+
+* **Datei:** `src/oenergy/web/routes.py:363-366`
+* **Was:** Belegt produktiv: `{"status":"ok","db":"sqlite:////data/o-energy.db"}` –
+  Pfadangabe ohne Geheimnis; Healthchecks (Docker, Monitoring) brauchen nur `status`.
+* **Vorschlag:** Nur `{"status":"ok"}` zurückgeben.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [INFO] Kostenfelder teils Float statt Integer-Cents
+
+* **Datei:** `src/oenergy/db/models.py` – `DailyStat.cost_cents/energy_cost_cents/standing_cost_cents`
+  und `Bill.total_cents` als `Float`, während `Account.balance_cents` korrekt `Integer` ist.
+* **Warum relevant:** Mischbetrieb; Float-Cents können Rundungsdrift in Anzeige und
+  Monatsprognose erzeugen (Korrektheit, keine Sicherheit).
+* **Vorschlag:** Neuen Spalten Integer-Cents geben; bestehende beim nächsten
+  Schema-Wechsel migrieren.
+* **Aufwand:** mittel
+* **Sicherheit:** belegt (Schema)
+
+### [INFO] `POST /actions/sync` führt unbekannte Job-Namen als Fehlerlauf aus
+
+* **Datei:** `src/oenergy/web/routes.py` (`action_sync`) + `services/sync.py`
+  (`run_job`: `JOBS[job_name]` → KeyError läuft in den Fehlerzweig).
+* **Was:** `job=beliebig` erzeugt eine SyncRun-Fehlerzeile inkl. nutzerkontrolliertem
+  String in Log und Anzeige statt 400. Keine Injection (dict-Lookup), aber
+  Protokollzeilen sind per Newline fälschbar (loguru escapet nicht).
+* **Vorschlag:** `job` gegen `JOBS` validieren, unbekannte mit 400 abweisen.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+### [INFO] WebAuthn: User-Verification nicht erzwungen; Challenge ohne Ablauf
+
+* **Datei:** `src/oenergy/services/webauthn_service.py:171`
+  (`require_user_verification=False`), Challenge lebt in der Session bis zur
+  Verwendung (max. Sitzungsdauer, kein Zeitstempel).
+* **Was:** Ein Passkey genügt ohne PIN/Biometrie-Abfrage (Options sagen nur
+  „preferred“). Replay eines abgefangenen Assertions ist nur möglich, solange
+  dieselbe Challenge ungenutzt in der Session liegt.
+* **Warum relevant:** Für ein Single-User-Gerät vertretbar; auf geteilten Geräten
+  wäre UV eine sinnvolle harte Barriere.
+* **Vorschlag:** `require_user_verification=True` setzen, wenn alle Passkeys UV
+  unterstützen; Challenge mit Zeitstempel + 2-Minuten-Fenster.
+* **Aufwand:** klein
+* **Sicherheit:** belegt (Code)
+
+### [INFO] Kosmetik und Betriebs­empfehlungen
+
+* **Datei:** `src/oenergy/web/auth.py:38,48` – `" [::1] "` in `LOCAL_HOSTS` ist
+  tot: `Host: [::1]:8999` → `split(":")[0] == "["` matcht nie (Bypass verwehrt, nur der
+  Eintrag ist wirkungslos).
+* **Datei:** `src/oenergy/web/auth.py:31` – `PUBLIC_PATHS` enthält `/favicon.ico`,
+  dafür existiert keine Route (404; die Favicons kommen als Data-URI aus den
+  Templates).
+* **Datei:** `docker-compose.yml:16-17` – `8000:8000` veröffentlicht den App-Port auf
+  allen Interfaces. Die Auth-Middleware hält LAN-Zugriffe ab (Bypass verlangt Host
+  **und** Peer lokal – belegt am Codepfad, `is_local_request` prüft beide), aber ohne
+  Tunnel-Bedarf genügt `127.0.0.1:8000:8000`.
+* **Vorschlag:** Einzelheiten je Budget aufräumen; Port-Mapping auf Loopback, wenn
+  der Tunnelprofil läuft.
+* **Aufwand:** klein
+* **Sicherheit:** belegt
+
+---
+
+### Zusammenfassung
+
+| Schwere | Anzahl |
+|---|---|
+| KRITISCH | 0 |
+| HOCH | 0 |
+| MITTEL | 2 |
+| NIEDRIG | 8 |
+| INFO | 4 (plus Sammelbefund Kosmetik) |
+
+Die drei wichtigsten Befunde:
+
+1. **Service Worker cached authentifizierte Seiten dauerhaft** – persönliche Daten
+   überdauern die Abmeldung im Cache Storage; die Doku behauptet das Gegenteil.
+2. **Offene Weiterleitung in der Passkey-Anmeldung** – `next` wird ungeprüft an
+   `window.location.href` durchgereicht; das Passwort-Login blockt denselben Angriff.
+3. **`set-password` schreibt den Compose-escapten Hash** – im Direktbetrieb ohne
+   Docker ist damit kein Login möglich; die naheliegende „Reparatur“ (Hash entfernen)
+   öffnet die App im Internet. Dazu passend: DB, Backups und Log liegen mit 0644 statt
+   0600 auf der Platte.
+
+Kein KRITISCH/HOCH-Befund: alle Routen sind geschützt, kein SQL/HTML/JS-Injektionsweg
+gefunden, keine Secrets in der Historie, keine bekannten CVEs im Lockfile. Die
+Schwachstellen härten das System ab oder brauchen Vorbedingungen (lokaler Zugriff,
+Opfer-Interaktion, schwaches Passwort).
+
+### Was ist ausdrücklich in Ordnung
+
+* **Authentifizierungs-Middleware wirkt lückenlos.** Alle 35 Routen wurden ohne
+  Anmeldung geprüft (isoliente Instanz + produktiv): Seiten → 303 auf `/login?next=…`,
+  `/api/*` → 401-JSON. Öffentlich sind exakt die dokumentierten Pfade (`/login`,
+  `/api/health`, `/sw.js`, `/favicon.ico`, `/static/*`, Passkey-Login-Endpunkte).
+* **Passwort-Login solide:** Argon2id über pwdlib, identische Fehlerantwort (keine
+  Enumeration), Cookie mit `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=14 Tage`
+  (belegt am Set-Cookie; `COOKIE_SECURE` korrekt konfigurierbar).
+* **Kein Open Redirect beim Passwort-Login:** `next=https://…`, `//…`, `/\…` werden
+  geblockt bzw. durch URL-Quoting (`%5C`) entschärft (belegt; der Backslash-Bypass
+  trifft hier nicht).
+* **Kein XSS gefunden:** Jinja-Autoescaping aktiv (`select_autoescape`, an der
+  venv-Version verifiziert); `error`/`next` dynamisch escaped getestet; kein
+  `|safe`/`Markup` in den Templates; `innerHTML` nur mit konstanten Strings; kein
+  `eval`/`Function` in `app.js`.
+* **Keine SQL-Injektion:** ausschließlich ORM mit gebundenen Parametern, kein `text()`
+  mit Interpolation im Code; `PRAGMA foreign_keys=ON`; Bulk-Inserts mit
+  `on_conflict_do_update` und Blockgröße (`CHUNK_SIZE`).
+* **`AUTH_LOCAL_BYPASS` korrekt implementiert:** Host-Header **und** Peer-Adresse
+  müssen lokal sein (auth.py:41-58) – ein Cloudflare-Tunnel (Peer 127.0.0.1, Host
+  strom.tbaer.de) erhält keinen Bypass.
+* **CSFR-Fläche klein:** `SameSite=Lax` + kein CORS-Middleware + keine
+  zustandsändernden GETs (Ausnahme `/logout`, dokumentiert als NIEDRIG-Befund);
+  Cross-Site-POSTs tragen kein Cookie.
+* **Export enthält keine Secrets:** `EXPORT_TABLES` ohne `tokens`/`app_settings` –
+  der Anspruch in AGENTS.md § 8 (kein Sitzungs-Secret im Export) stimmt; Web-Import
+  existiert nicht.
+* **Keine Geheimnisse in der Git-Historie:** Scan aller Commits nach
+  Argon2-/Private-Key-/Passwort-Mustern – nur Platzhalter aus `.env.example`/README/CLI.
+  CI führt gitleaks mit voller Historie; `.gitignore` deckt `.env`, `data/`, `*.db`,
+  `probe.json` ab.
+* **Abhängigkeiten sauber:** `pip-audit` (OSV) über den kompletten Lockfile-Bestand
+  (1724 Zeilen resolved): keine bekannten Schwachstellen (Stand 2026-11-18); Pillow
+  nur Dev-Werkzeug für ein Offline-Skript.
+* **Docker:** Nicht-Root (uid 1000), Healthcheck, `--no-dev`, Abhängigkeiten vor Code;
+  Compose-Profil `worker` ist dokumentierte Alternative, kein Doppelbetrieb.
+* **Path-Traversal abgewehrt:** `/static/../`, `..%2f`, `%2e%2e`-Varianten → 404
+  (belegt, StaticFiles-Schutz).
+* **WebAuthn-Umfeld:** Challenge 32 Byte `secrets.token_bytes`, sessiongebunden und
+  nach Verwendung entfernt; Registrierung nur für Angemeldete (401 belegt);
+  py_webauthn 3.x-API korrekt verwendet (AGENTS.md-Fakten bestätigt).
+* **API-Client:** Timeouts (30 s), begrenzte Retries (6) mit Backoff, keine
+  Token/E-Mail-Ausgaben im Log, Fehlerausschnitte auf 200 Zeichen gekürzt.
+* **Werkzeugkette funktioniert wie dokumentiert:** Quickstart in der isolierten Kopie
+  vollständig nachgefahren (uv sync → alembic → seed → serve); Job-Plan stimmt mit
+  AGENTS.md überein (15 min/08:17/06:12/12 h); 81 Tests grün, ruff clean, Formatierung
+  clean.
+
+### Getestet wurde
+
+**Statisch:** alle 30 Python-Module unter `src/oenergy/` inkl. `services/`
+(HTTP-Freiheit bestätigt – kein FastAPI/Starlette-Import), alle Templates und
+Partials, `sw.js`, `app.js`, `offline.html`, `manifest.webmanifest`,
+Dockerfile/docker-compose/backup.sh, `.github/` (CI, Dependabot, CODEOWNERS),
+`.gitignore`, `.env.example`, README/SECURITY/AGENTS/AI/CHANGELOG, uv.lock
+(Versionsauflösung), alembic-Migrationen, git-Historie (Geheimnis-Scan).
+
+**Dynamisch, isolierte Instanz** (`/tmp/review/o-energy`, eigener Klon, Port 8999,
+Demo-Daten via `seed`, eigenes Test-Passwort, `AUTH_LOCAL_BYPASS=false`,
+SCHEDULER aus, Dummy-Passkey-Zeile für den Passkey-Pfad): Routen-Sweep ohne
+Anmeldung; Login korrekt/falsch; Cookie-Flags; Open-Redirect-Varianten (6); XSS-Escaping
+von `error`/`next`; Bypass-Token (richtig/falsch/Groß-Klein/Doppel-Header);
+Logout + Wiederverwendung; Cache-/Security-Header; Push-SSRF gegen lokalen Listener;
+Host-Header→RP-ID-Echo; 20-MB-Body; Path-Traversal; `pip-audit`; `pytest -q` (81
+bestanden); `ruff check/format`.
+
+**Produktive Instanz** `https://strom.tbaer.de` – ausschließlich unauthentifiziert:
+`/`, `/login`, `/system`, `/api/state` (401), `/api/health` (leakt DB-URL),
+`/sw.js`, Header-Bild, Cloudflare-Verhalten. Keine Loginversuche, keine Datenabrufe,
+kein Eingriff in den laufenden Container.
+
+**Nicht prüfbar / nicht geprüft:** echte WebAuthn-Zeremonie im Browser (kein Passkey
+verfügbar; Passkey-Pfad per Code + Options-Echo bewertet), Timing-Angriffe auf den
+`==`-Vergleich (nicht messbar), Lasttests/DoS nur als Einzelrequest demonstriert,
+Betriebsdaten (`data/`, `.env`) wurden auf Befundprüfung nie gelesen – nur
+Dateirechte (Metadaten).
+
+**Blocker:** keine.

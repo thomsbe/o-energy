@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -95,7 +96,7 @@ def registration_options(
         ],
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.DISCOURAGED,
-            user_verification=UserVerificationRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.REQUIRED,
         ),
     )
     return options_to_json_dict(options), options.challenge
@@ -142,7 +143,7 @@ def authentication_options(session: Session, context: WebauthnContext) -> tuple[
             )
             for cred in credentials
         ],
-        user_verification=UserVerificationRequirement.PREFERRED,
+        user_verification=UserVerificationRequirement.REQUIRED,
     )
     return options_to_json_dict(options), options.challenge
 
@@ -152,6 +153,7 @@ def finish_authentication(
     context: WebauthnContext,
     response: dict,
     expected_challenge: bytes,
+    require_user_verification: bool = True,
 ) -> WebauthnCredential:
     """Die Signatur prüfen und den Zählerstand aktualisieren."""
     credential = parse_authentication_credential_json(response)
@@ -168,7 +170,7 @@ def finish_authentication(
         expected_origin=context.origin,
         credential_public_key=row.public_key,
         credential_current_sign_count=row.sign_count,
-        require_user_verification=False,
+        require_user_verification=require_user_verification,
     )
     row.sign_count = verification.new_sign_count
     row.last_used_at = datetime.utcnow()
@@ -185,5 +187,34 @@ def delete_credential(session: Session, credential_id: str) -> bool:
     return True
 
 
+#: Wie lange eine Challenge gültig ist (Sekunden)
+CHALLENGE_TTL = 120
+
+
 def new_challenge() -> bytes:
     return secrets.token_bytes(32)
+
+
+def store_challenge(session_data: dict, challenge: bytes) -> None:
+    """Challenge mit Zeitstempel in der Sitzung ablegen."""
+    session_data["webauthn_challenge"] = challenge.hex()
+    session_data["webauthn_challenge_at"] = time.time()
+
+
+def load_challenge(session_data: dict) -> bytes | None:
+    """Challenge aus der Sitzung lesen - nur, solange sie nicht abgelaufen ist."""
+    value = session_data.get("webauthn_challenge")
+    created = session_data.get("webauthn_challenge_at")
+    if not value or created is None:
+        return None
+    if time.time() - float(created) > CHALLENGE_TTL:
+        return None
+    try:
+        return bytes.fromhex(value)
+    except ValueError:
+        return None
+
+
+def clear_challenge(session_data: dict) -> None:
+    session_data.pop("webauthn_challenge", None)
+    session_data.pop("webauthn_challenge_at", None)

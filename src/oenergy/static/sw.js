@@ -6,6 +6,9 @@
  *   kommt die zuletzt gecachte Seite.
  */
 const CACHE = "oenergy-v2";
+//: Nur diese Seiten werden zwischengespeichert - sie enthalten keine Daten.
+const OFFLINE_PAGES = ["/login"];
+
 const ASSETS = [
   "/static/css/app.css",
   "/static/js/app.js",
@@ -51,14 +54,21 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
+    // Wichtig: authentifizierte Seiten werden NICHT gecacht. Sie enthalten
+    // Verbrauchs-, Kosten- und Kontodaten und würden die Abmeldung überdauern.
+    const cacheable = OFFLINE_PAGES.includes(url.pathname);
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          if (cacheable && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          }
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/login"))),
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match("/static/offline.html")),
+        ),
     );
     return;
   }
@@ -119,4 +129,18 @@ self.addEventListener("notificationclick", (event) => {
       return self.clients.openWindow(url);
     }),
   );
+});
+
+/* ---------- Cache beim Abmelden leeren ---------- */
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "clear-page-cache") {
+    event.waitUntil(
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+        .then(() => self.clients.matchAll().then((clients) =>
+          clients.forEach((client) => client.postMessage({ type: "cache-cleared" })),
+        )),
+    );
+  }
 });

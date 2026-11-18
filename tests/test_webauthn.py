@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import contextlib
 
+import pytest
+
 from oenergy.config import get_settings
 from oenergy.services.webauthn_service import (
     authentication_options,
@@ -121,10 +123,11 @@ def test_push_subscription_round_trip(session) -> None:
     key = push.public_key(session)
     assert key
 
+    endpoint = "https://fcm.googleapis.com/fcm/send/abc"
     push.subscribe(
         session,
         {
-            "endpoint": "https://push.example/abc",
+            "endpoint": endpoint,
             "keys": {"p256dh": "p256dh-value", "auth": "auth-value"},
         },
     )
@@ -134,13 +137,38 @@ def test_push_subscription_round_trip(session) -> None:
     push.subscribe(
         session,
         {
-            "endpoint": "https://push.example/abc",
+            "endpoint": endpoint,
             "keys": {"p256dh": "p256dh-value", "auth": "auth-value"},
         },
     )
     assert len(push.subscriptions(session)) == 1
 
-    assert push.unsubscribe(session, "https://push.example/abc") is True
+    assert push.unsubscribe(session, endpoint) is True
+    assert push.subscriptions(session) == []
+
+
+def test_push_only_accepts_known_push_services(session) -> None:
+    """Ein Abo auf einen fremden Host wäre ein SSRF-Werkzeug."""
+    from oenergy.services import push
+
+    with pytest.raises(ValueError):
+        push.subscribe(
+            session,
+            {
+                "endpoint": "http://127.0.0.1:8998/push-target",
+                "keys": {"p256dh": "x", "auth": "y"},
+            },
+        )
+
+    with pytest.raises(ValueError):
+        push.subscribe(
+            session,
+            {
+                "endpoint": "https://evil.example/push",
+                "keys": {"p256dh": "x", "auth": "y"},
+            },
+        )
+
     assert push.subscriptions(session) == []
 
 

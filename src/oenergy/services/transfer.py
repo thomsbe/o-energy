@@ -355,11 +355,16 @@ def _import_reading_windows(session: Session, rows: list[dict[str, Any]]) -> int
     )
 
 
-def write_env_value(target: str | Path, key: str, value: str) -> Path:
-    """Schreibt einen Schlüssel in eine .env-Datei (Compose-tauglich escaped)."""
+def write_env_value(target: str | Path, key: str, value: str, *, escape: bool = True) -> Path:
+    """Schreibt einen Schlüssel in eine .env-Datei.
+
+    ``escape=True`` maskiert die ``$`` für Docker Compose (dort bedeutet ``$$``
+    ein einzelnes ``$``). Die App normalisiert beide Formen beim Laden, für
+    Kompatibilität mit älteren Versionen wird hier escaped geschrieben.
+    """
     path = Path(target)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    entry = f"{key}={value.replace('$', '$$')}"
+    entry = f"{key}={value.replace('$', '$$') if escape else value}"
     for index, line in enumerate(lines):
         if line.startswith(f"{key}=") or line.startswith(f"# {key}="):
             lines[index] = entry

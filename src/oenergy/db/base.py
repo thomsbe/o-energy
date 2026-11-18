@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+import os
+import stat
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +23,7 @@ def _build_engine(db_url: str) -> Engine:
     engine = create_engine(db_url, connect_args=connect_args, pool_pre_ping=True, future=True)
 
     if db_url.startswith("sqlite"):
+        _restrict_permissions(db_url)
 
         @event.listens_for(engine, "connect")
         def _set_sqlite_pragmas(dbapi_connection, _record):  # pragma: no cover - trivial
@@ -30,6 +34,21 @@ def _build_engine(db_url: str) -> Engine:
             cursor.close()
 
     return engine
+
+
+def _restrict_permissions(db_url: str) -> None:
+    """Datenbank (und WAL-Dateien) nur für den Eigentümer lesbar.
+
+    In der Datenbank liegen das Access-/Refresh-Token des Octopus-Zugangs und
+    die Kontodaten - das gehört nicht in die Hände anderer lokaler Konten.
+    """
+    path = resolve_db_path(db_url)
+    for suffix in ("", "-wal", "-shm"):
+        target = Path(f"{path}{suffix}")
+        if not target.exists():
+            continue
+        with contextlib.suppress(OSError):  # pragma: no cover - fremdes Dateisystem
+            os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
 
 
 class Database:

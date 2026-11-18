@@ -30,6 +30,12 @@
   }
 
   // ------------------------------------------------------- Service Worker
+  function clearServiceWorkerCache() {
+    // nach dem Abmelden dürfen keine Seiten mit Daten im Cache liegen bleiben
+    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) { return; }
+    navigator.serviceWorker.controller.postMessage({ type: "clear-page-cache" });
+  }
+
   function appVersion() {
     var meta = document.querySelector('meta[name="app-version"]');
     return meta ? meta.getAttribute("content") : "0";

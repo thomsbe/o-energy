@@ -2,6 +2,9 @@
 # Erstellt Backups der Datenbank: SQLite-Kopie und schemaunabhängigen JSON-Export.
 set -euo pipefail
 
+# Backups enthalten Tokens und Kontodaten - nur für den Eigentümer lesbar
+umask 077
+
 DB_PATH="${1:-./data/o-energy.db}"
 BACKUP_DIR="${BACKUP_DIR:-./data/backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -25,6 +28,7 @@ else
 fi
 
 gzip -f "$TARGET"
+chmod 600 "$TARGET.gz"
 echo "SQLite-Backup: ${TARGET}.gz"
 
 # JSON-Export (schemaunabhängig, mit 'oenergy import' wiederherstellbar)

@@ -47,8 +47,21 @@ erfolgt erst, wenn ein Fix verfügbar ist.
   Refresh-Token) liegen im Klartext in der `.env` bzw. in der Datenbank. Beides
   gehört auf den eigenen Rechner – `.env` mit `chmod 600`, Datenbankverzeichnis
   nicht öffentlich, beides nicht ins Repository (siehe `.gitignore`).
-* **Der Service Worker** cacht die statischen Dateien, aber keine API-Antworten.
-  Die zwischengespeicherte Login-Seite enthält keine Geheimnisse.
+* **Der Service Worker** cacht die statischen Dateien, aber **keine
+  authentifizierten Seiten und keine API-Antworten** – nur die Login-Seite
+  (ohne Daten). Beim Abmelden wird der Cache zusätzlich geleert.
+* **Sicherheits-Header**: alle Antworten tragen `X-Content-Type-Options`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` und eine CSP;
+  authentifizierte Seiten zusätzlich `Cache-Control: no-store`.
+* **Rate-Limit**: Nach 10 fehlgeschlagenen Anmeldeversuchen wird die Herkunft
+  für 5 Minuten gesperrt.
+* **Request-Größe**: Bodies über 256 KB werden mit 413 abgewiesen.
+* **Sitzungen**: Das Cookie ist selbsttragend, wird aber beim Abmelden serverseitig
+  entwertet (Sitzungs-Epoche) – ein kopierter Cookie-Wert ist danach wertlos.
+* **Push-Abonnements** sind auf die bekannten Push-Dienste beschränkt (FCM,
+  Mozilla, Apple) – der Server postet nicht an beliebige URLs.
+* **Dateirechte**: Datenbank, WAL, Log und Backups werden mit `0600` angelegt
+  (nur für den Eigentümer lesbar).
 
 ### Empfehlungen für den Betrieb im Internet
 

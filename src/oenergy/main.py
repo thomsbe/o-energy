@@ -13,7 +13,12 @@ from oenergy.config import get_settings
 from oenergy.db.base import get_database
 from oenergy.jobs import start_scheduler, stop_scheduler
 from oenergy.logging_config import setup_logging
-from oenergy.web.auth import RequireLoginMiddleware, ensure_session_secret
+from oenergy.web.auth import (
+    BodyLimitMiddleware,
+    RequireLoginMiddleware,
+    SecurityHeadersMiddleware,
+    ensure_session_secret,
+)
 from oenergy.web.push_routes import router as push_router
 from oenergy.web.routes import router
 from oenergy.web.webauthn_routes import router as webauthn_router
@@ -90,9 +95,13 @@ def create_app() -> FastAPI:
     app.include_router(webauthn_router)
     app.include_router(push_router)
 
-    # Anmeldung: die Session wird von aussen nach innen aufgebaut, damit die
-    # Middleware die Session bereits vorfindet.
+    # Reihenfolge der Middleware. Starlette wickelt die zuletzt hinzugefügte
+    # Middleware als **innerste** - die Session muss deshalb **ausserhalb**
+    # der Anmeldeprüfung liegen, damit dort das Cookie schon dekodiert ist:
+    #   Session -> SecurityHeaders -> BodyLimit -> RequireLogin
     app.add_middleware(RequireLoginMiddleware, settings=settings)
+    app.add_middleware(BodyLimitMiddleware, max_bytes=256 * 1024)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=ensure_session_secret(settings, get_database()),

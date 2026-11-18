@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
         port=args.port or settings.app_port,
         reload=args.reload,
         log_level="info",
+        # hinter einem Reverse-Proxy oder Cloudflare-Tunnel stehen Schema und
+        # Host nur in X-Forwarded-*. Ohne das wäre die WebAuthn-Origin
+        # "http://..." und das Passkey-Login würde scheitern.
+        proxy_headers=True,
+        forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"),
     )
     return 0
 
@@ -291,29 +297,29 @@ def cmd_set_password(args: argparse.Namespace) -> int:
     hashed = hash_password(password)
 
     if args.write_env:
+        from oenergy.services.transfer import write_env_value
+
         target = Path(args.env_file or ".env")
-        lines = target.read_text(encoding="utf-8").splitlines() if target.exists() else []
-        # Docker Compose interpoliert die .env - die $ müssen als $$ escaped werden
-        entry = f"AUTH_PASSWORD_HASH={hashed.replace('$', '$$')}"
-        replaced = False
-        for index, line in enumerate(lines):
-            if line.startswith("AUTH_PASSWORD_HASH="):
-                lines[index] = entry
-                replaced = True
-                break
-        if not replaced:
-            lines.append(entry)
-        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # escaped schreiben (Docker Compose ersetzt $$ durch $). Beim
+        # Direktbetrieb liest die Datei der Punktenv den Wert roh - die App
+        # normalisiert beide Formen beim Laden, der Hash bleibt also gültig.
+        write_env_value(target, "AUTH_PASSWORD_HASH", hashed)
         print(f"Passwort-Hash in {target} geschrieben (für Docker Compose escaped).")
+        print("Die App akzeptiert die escaped und die unescaped Form.")
         print("Damit die Änderung wirkt: docker compose up -d --force-recreate")
         return 0
 
     print()
-    print("Diese Zeile in die .env übernehmen (in Docker Compose mit $$ escapen!):")
+    print("Für den Direktbetrieb (uv run oenergy serve) - unescaped:")
+    print()
+    print(f"AUTH_PASSWORD_HASH={hashed}")
+    print()
+    print("Für Docker Compose - mit $$ escaped (Compose ersetzt $$ durch $):")
     print()
     print(f"AUTH_PASSWORD_HASH={hashed.replace('$', '$$')}")
     print()
     print("Oder direkt schreiben lassen: oenergy set-password --write-env")
+    print("(die App normalisiert beide Formen beim Laden)")
     return 0
 
 

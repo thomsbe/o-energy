@@ -14,6 +14,10 @@ services:
     volumes:
       - ./data:/data
     ports:
+      # Auf allen Interfaces: der Cloudflare-Tunnel läuft als eigener
+      # Container und erreicht den Dienst über das Docker-Netz. Eine Bindung
+      # auf 127.0.0.1 würde den Tunnel aussperren (502). Wer den Tunnel auf
+      # dem Host laufen lässt, kann hier "127.0.0.1:8000:8000" setzen.
       - "8000:8000"
 
   # Optionaler Worker ohne Web-Server.

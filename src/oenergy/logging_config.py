@@ -7,6 +7,7 @@ ends up in the same format - including the uvicorn access log.
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import logging
 import sys
@@ -64,6 +65,9 @@ def setup_logging(
     if log_file:
         path = Path(log_file)
         path.parent.mkdir(parents=True, exist_ok=True)
+        # die Logdatei kann Token-Fehler enthalten - nur für den Eigentümer
+        with contextlib.suppress(OSError):  # pragma: no cover
+            path.parent.chmod(0o700)
         logger.add(
             str(path),
             level=level,
@@ -75,6 +79,8 @@ def setup_logging(
             backtrace=False,
             diagnose=False,
         )
+        with contextlib.suppress(OSError):  # pragma: no cover
+            path.chmod(0o600)
 
     # Standardbibliothek-Logging auf loguru umbiegen
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)

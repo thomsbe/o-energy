@@ -475,7 +475,9 @@ def test_full_sync_pipeline(database) -> None:
     assert stats
     # 0.25 kWh at 9.0 ct and 0.5 kWh at 9.5 ct (net) -> gross with 19% VAT
     day_stat = next(stat for stat in stats if stat.energy_cost_cents > 0)
-    assert round(day_stat.energy_cost_cents, 4) == 8.33
+    # die Geldbeträge sind ganzzahlige Cent
+    assert day_stat.energy_cost_cents == 8
+    assert day_stat.cost_cents == day_stat.energy_cost_cents + day_stat.standing_cost_cents
     assert day_stat.standing_cost_cents > 0
 
     session.close()

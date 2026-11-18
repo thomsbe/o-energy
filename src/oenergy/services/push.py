@@ -30,6 +30,28 @@ KEY_CONTACT = "vapid_contact"
 
 DEFAULT_CONTACT = "mailto:admin@example.org"
 
+#: Bekannte Push-Dienste der Browser - ein Abo auf einen anderen Host wäre
+#: ein Werkzeug für Angriffe auf das interne Netz (SSRF).
+ALLOWED_PUSH_HOSTS = (
+    "fcm.googleapis.com",
+    "updates.push.services.mozilla.com",
+    "web.push.apple.com",
+    "push.services.mozilla.com",
+    "wns2-{region}.notify.windows.com",
+)
+
+
+def _is_allowed_endpoint(endpoint: str) -> bool:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(endpoint)
+    if parsed.scheme != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    return any(host == allowed or host.endswith(f".{allowed}") for allowed in ALLOWED_PUSH_HOSTS)
+
 
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode().rstrip("=")
@@ -101,6 +123,9 @@ def subscribe(session: Session, payload: dict) -> PushSubscription:
     keys_data = payload.get("keys") or {}
     if not endpoint or not keys_data.get("p256dh") or not keys_data.get("auth"):
         raise ValueError("Unvollständiges Push-Abonnement")
+    if not _is_allowed_endpoint(endpoint):
+        # der Server würde sonst an beliebige URLs POSTen (SSRF)
+        raise ValueError("Push-Endpunkt wird nicht unterstützt")
 
     row = session.scalar(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
     if row is None:

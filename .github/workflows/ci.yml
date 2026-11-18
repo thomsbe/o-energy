@@ -14,15 +14,17 @@ jobs:
   test:
     name: Tests und Linting
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: uv einrichten
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
@@ -47,13 +49,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # die ganze Historie - Geheimnisse landen oft in alten Commits
           fetch-depth: 0
 
       - name: Auf versehentlich committete Geheimnisse prüfen (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # in einem öffentlichen Repo reichen die eigenen Commits
@@ -62,7 +64,9 @@ jobs:
   docker:
     name: Docker-Image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Image bauen
         run: docker build -t o-energy:ci .

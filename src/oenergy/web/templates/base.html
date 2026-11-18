@@ -45,7 +45,7 @@
       {% endif %}
       {% if current_user(request) %}
         <span class="chip chip-muted" title="Angemeldet als {{ current_user(request) }}">{{ current_user(request) }}</span>
-        <a class="btn" href="/logout">Abmelden</a>
+        <a class="btn" href="/logout" id="logout-link">Abmelden</a>
       {% endif %}
       <button class="icon-btn" id="theme-toggle" type="button" title="Hell/Dunkel umschalten">◐</button>
     </div>

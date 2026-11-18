@@ -10,14 +10,17 @@ from oenergy.config import get_settings
 from oenergy.db.base import get_session
 from oenergy.services.webauthn_service import (
     authentication_options,
+    clear_challenge,
     context_for,
     delete_credential,
     finish_authentication,
     finish_registration,
     list_credentials,
+    load_challenge,
     registration_options,
+    store_challenge,
 )
-from oenergy.web.auth import current_user
+from oenergy.web.auth import current_user, safe_next
 
 router = APIRouter()
 
@@ -41,25 +44,34 @@ async def passkey_login_options(request: Request, session: Session = Depends(get
         return _not_ready("Es ist noch kein Passkey registriert")
 
     options, challenge = authentication_options(session, context)
-    request.session["webauthn_challenge"] = challenge.hex()
-    return JSONResponse({"options": options, "next": request.query_params.get("next", "/")})
+    store_challenge(request.session, challenge)
+    # das Weiterleitungsziel wird geprüft - sonst könnte ein präpariertes
+    # Link nach der Anmeldung auf eine fremde Seite führen
+    target = safe_next(request.query_params.get("next"))
+    return JSONResponse({"options": options, "next": target})
 
 
 @router.post("/api/auth/passkey/login/verify")
 async def passkey_login_verify(request: Request, session: Session = Depends(get_session)):
     context, settings = _context(request)
     payload = await request.json()
-    challenge = _challenge_from_session(request)
+    challenge = load_challenge(request.session)
     if not challenge:
         return _not_ready("Keine Anmeldeaufforderung gefunden - bitte erneut versuchen")
 
     try:
-        credential = finish_authentication(session, context, payload.get("credential") or payload, challenge)
+        credential = finish_authentication(
+            session,
+            context,
+            payload.get("credential") or payload,
+            challenge,
+            require_user_verification=settings.webauthn_require_user_verification,
+        )
     except Exception as exc:
         return JSONResponse({"error": f"Anmeldung fehlgeschlagen: {exc}"}, status_code=401)
 
     request.session["user"] = settings.auth_username
-    request.session.pop("webauthn_challenge", None)
+    clear_challenge(request.session)
     return JSONResponse({"ok": True, "label": credential.label})
 
 
@@ -72,7 +84,7 @@ async def passkey_register_options(request: Request, session: Session = Depends(
         return _not_ready("Passkeys sind deaktiviert")
 
     options, challenge = registration_options(session, context, settings)
-    request.session["webauthn_challenge"] = challenge.hex()
+    store_challenge(request.session, challenge)
     return JSONResponse({"options": options})
 
 
@@ -82,7 +94,7 @@ async def passkey_register_verify(request: Request, session: Session = Depends(g
         return JSONResponse({"error": "nicht angemeldet"}, status_code=401)
     context, _settings = _context(request)
     payload = await request.json()
-    challenge = _challenge_from_session(request)
+    challenge = load_challenge(request.session)
     if not challenge:
         return _not_ready("Keine Registrierungsaufforderung gefunden - bitte erneut versuchen")
 
@@ -97,7 +109,7 @@ async def passkey_register_verify(request: Request, session: Session = Depends(g
     except Exception as exc:
         return JSONResponse({"error": f"Registrierung fehlgeschlagen: {exc}"}, status_code=400)
 
-    request.session.pop("webauthn_challenge", None)
+    clear_challenge(request.session)
     return JSONResponse({"ok": True, "id": credential.credential_id, "label": credential.label})
 
 
@@ -127,17 +139,3 @@ async def passkey_delete(credential_id: str, request: Request, session: Session 
         return JSONResponse({"error": "nicht angemeldet"}, status_code=401)
     removed = delete_credential(session, credential_id)
     return JSONResponse({"ok": removed}, status_code=200 if removed else 404)
-
-
-# --- Hilfsfunktionen -------------------------------------------------------
-
-
-def _challenge_from_session(request: Request) -> bytes | None:
-    """Die Challenge aus der Sitzung lesen (sie wird dort als Hex abgelegt)."""
-    value = request.session.get("webauthn_challenge")
-    if not value:
-        return None
-    try:
-        return bytes.fromhex(value)
-    except ValueError:
-        return None

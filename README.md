@@ -226,9 +226,14 @@ Den ausgegebenen Hash in die `.env` eintragen:
 > kommt er im Container zerstört an und die Anmeldung schlägt immer fehl:
 >
 > ```bash
-> # in der .env
+> # in der .env (Docker Compose)
 > AUTH_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$…$$…
 > ```
+>
+> `oenergy set-password --write-env` erledigt das automatisch. Beim **Direktbetrieb**
+> (`uv run oenergy serve`) wird der Wert unescaped eingetragen – die App
+> normalisiert inzwischen beide Formen, ein falscher Hash führt aber trotzdem
+> zu einer gesperrten Anmeldung.
 
 
 ```bash
@@ -253,6 +258,7 @@ wird beim ersten Start erzeugt und in der Datenbank abgelegt – es bleibt also
 | `AUTH_BYPASS_TOKEN` | – | optionales Secret-Header `X-OEnergy-Token` für Skripte |
 | `SESSION_MAX_AGE_DAYS` | `14` | Gültigkeit der Sitzung |
 | `COOKIE_SECURE` | `false` | auf `true` setzen, wenn die App nur über HTTPS erreichbar ist |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | wem uvicorn `X-Forwarded-*` glaubt (Reverse-Proxy/Tunnel) |
 
 Solange kein Hash gesetzt ist, bleibt die App offen und weist in der Kopfzeile
 mit einem gelben Hinweis darauf hin. **Für einen Betrieb im Internet
@@ -283,6 +289,18 @@ ausgegeben. Alternativ greift `AUTH_LOCAL_BYPASS`: Aufrufe, bei denen **sowohl**
 der Host als auch die Quelle lokal sind (`localhost`/`127.0.0.1`), kommen ohne
 Anmeldung durch – ein Aufruf über den Cloudflare-Tunnel also **nicht**, weil
 dort der Host die öffentliche Adresse ist.
+
+### Hinter einem Reverse-Proxy oder Tunnel
+
+`uvicorn` wertet `X-Forwarded-Proto` und `X-Forwarded-Host` aus, damit das
+richtige Schema und der richtige Host verwendet werden – nötig für Passkeys
+(sie brauchen `https://`) und für die Zugriffs-Protokollierung. Standardmäßig
+glaubt uvicorn dabei nur `127.0.0.1` (`FORWARDED_ALLOW_IPS`); steht der Proxy
+auf einem anderen Host, muss der Wert angepasst werden.
+
+Hinter einem Proxy **müssen** `WEBAUTHN_ORIGIN` und `WEBAUTHN_RP_ID` gesetzt
+sein (siehe unten) – sonst leitet die App die Origin aus der Anfrage ab und
+der Passkey-Login scheitert.
 
 ### Passkeys (WebAuthn)
 

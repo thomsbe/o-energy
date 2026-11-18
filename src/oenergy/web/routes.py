@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from oenergy import __version__
 from oenergy.config import get_settings
-from oenergy.db.base import get_database, get_session
+from oenergy.db.base import get_session
 from oenergy.db.models import Bill
 from oenergy.services import dashboard
 from oenergy.services.identity import token_status
@@ -22,8 +22,10 @@ from oenergy.services.sync import JOB_DESCRIPTIONS, JOB_LABELS, latest_runs, run
 from oenergy.utils import to_local
 from oenergy.web.auth import (
     auth_enabled,
+    bump_session_epoch,
     current_user,
     login,
+    login_is_locked,
     logout,
     redirect_to_login,
 )
@@ -112,6 +114,10 @@ def page_login(request: Request) -> HTMLResponse:
 @router.post("/login")
 async def do_login(request: Request) -> Response:
     settings = get_settings()
+    if login_is_locked(request):
+        logger.warning("Zu viele Anmeldeversuche - vorübergehend gesperrt")
+        return RedirectResponse(url="/login?error=locked", status_code=303)
+
     form = await request.form()
     password = str(form.get("password", ""))
     target = str(form.get("next", "/") or "/")
@@ -123,6 +129,7 @@ async def do_login(request: Request) -> Response:
 @router.get("/logout")
 def do_logout(request: Request) -> Response:
     logout(request)
+    bump_session_epoch()
     return RedirectResponse(url="/login", status_code=303)
 
 
@@ -272,6 +279,16 @@ def partial_sync_status(request: Request, session: Session = Depends(get_session
 
 @router.post("/actions/sync", response_class=HTMLResponse)
 def action_sync(request: Request, job: str = "readings") -> HTMLResponse:
+    from oenergy.services.sync import JOBS
+
+    if job not in JOBS:
+        # unbekannte Namen werden abgewiesen - sonst landet der String des
+        # Aufrufers im Log und in der Protokollanzeige
+        logger.warning("Unbekannter Sync-Job: {}", job[:40])
+        return HTMLResponse(
+            f"Unbekannter Job: {job[:40]}",
+            status_code=400,
+        )
     logger.info("Manual sync requested for job {}", job)
     run = run_job(job)
     return templates.TemplateResponse(
@@ -362,5 +379,5 @@ def export_data(session: Session = Depends(get_session)) -> Response:
 
 @router.get("/api/health")
 def health() -> JSONResponse:
-    database = get_database()
-    return JSONResponse({"status": "ok", "db": database.url})
+    """Nur der Status - der Datenbankpfad wird nicht nach außen gegeben."""
+    return JSONResponse({"status": "ok"})

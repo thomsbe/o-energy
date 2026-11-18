@@ -7,6 +7,49 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Sicherheit
+
+Die Ergebnisse eines unabhängigen Sicherheits- und Code-Reviews (siehe
+`REVIEW_1.md` / `REVIEW_1_OK.md`) sind umgesetzt:
+
+- **Der Service Worker cacht keine authentifizierten Seiten mehr** – vorher
+  überlebten Verbrauchs-, Kosten- und Kontodaten die Abmeldung im
+  Browser-Cache. Beim Abmelden wird der Cache zusätzlich geleert.
+- **Keine offene Weiterleitung in der Passkey-Anmeldung**: das `next`-Ziel wird
+  jetzt mit derselben Regel geprüft wie beim Passwort-Login (nur relative
+  Ziele innerhalb der App).
+- **Sicherheits- und Cache-Header** für alle Antworten (`nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, CSP) und
+  `Cache-Control: no-store` für authentifizierte Seiten.
+- **Limit für die Request-Größe** (256 KB, sonst 413) – ein anonymer Angreifer
+  kann nicht mehr mit einem einzelnen Riesenkörper den Speicher belasten.
+- **Rate-Limit für Anmeldeversuche**: nach 10 Fehlversuchen wird die Herkunft
+  für 5 Minuten gesperrt.
+- **Der Bypass-Token** wird zeitkonstant verglichen; doppelt gesetzte Header
+  werden verworfen.
+- **Sitzungen werden beim Abmelden serverseitig entwertet** (Sitzungs-Epoche) –
+  ein kopierter Cookie-Wert ist danach wertlos.
+- **Push-Abonnements** sind auf bekannte Push-Dienste beschränkt (kein SSRF
+  über den Server).
+- **Dateirechte**: Datenbank, WAL, Log und Backups werden mit `0600` angelegt.
+- **CI**: alle Jobs bekommen `permissions: contents: read`, die Actions sind auf
+  Commit-SHAs gepinnt.
+- **Härtung des WebAuthn-Flows**: die Challenge hat ein Ablauffenster (2
+  Minuten), die Benutzer-Verifikation (PIN/Biometrie) wird erzwungen.
+- Die **Middleware-Reihenfolge** wurde korrigiert: die SessionMiddleware muss
+  ausserhalb der Anmeldeprüfung liegen, sonst sieht diese kein dekodiertes
+  Cookie (Regressionstest vorhanden).
+
+### Behoben
+
+- `uvicorn` wertet jetzt `X-Forwarded-Proto`/`-Host` aus – hinter einem Tunnel
+  stimmen damit Schema und Host (nötig für Passkeys und das Zugriffs-Log).
+- Der Compose-escapte Passwort-Hash (`$$argon2id$$…`) wird beim Laden
+  normalisiert – im Direktbetrieb war die Anmeldung sonst unmöglich.
+- `/api/health` gibt den Datenbankpfad nicht mehr nach außen.
+- Unbekannte Job-Namen beim manuellen Sync werden mit 400 abgewiesen.
+- Geldbeträge liegen jetzt in ganzzahligen Cent (kein Rundungsdrift).
+
 ### Dokumentation
 
 - **AI.md**: wie das Projekt mit KI-Unterstützung entwickelt wurde und welche
