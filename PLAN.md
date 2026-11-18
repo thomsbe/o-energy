@@ -364,3 +364,118 @@ Nach drei Tagen Dauerbetrieb: die Zählerdaten kommen gegen **08:00 Uhr**, der
 stündliche Job holt sie um **08:07**, die Push-Nachricht geht **6 Sekunden**
 später raus. Keine Fehler in den Sync-Läufen. Die Tageswerte sind konsistent
 (Intervall-Summe = Tageswert, 96/96 Slots, als endgültig markiert).
+
+---
+
+## 9. Plan: MCP-Schnittstelle (FastMCP) – *noch nicht umgesetzt*
+
+> **Stand 18.11.2026:** Idee vom Maintainer, hier als Plan festgehalten. Es ist
+> **noch nichts implementiert** – der nächste Schritt ist die Entscheidung
+> (siehe 9.1) und danach die Umsetzung in den Schritten 9.3–9.7.
+
+### 9.1 Die Idee und meine Bewertung
+
+**Idee:** Eine MCP-Schnittstelle (Model Context Protocol) auf Basis von **FastMCP**,
+damit KI-Agenten den Datenstand abfragen können: Verbrauch, Kosten, Preise,
+Konto, Zähler, „wie viel habe ich letzten Monat verbraucht?", „wann war der
+teuerste Slot?", „was kostet mich der Strom diesen Monat?".
+
+**Bewertung: gute Idee, mit Auflagen umgesetzt.** Die App hält die Fachlogik
+bereits sauber in `services/` (ohne HTTP-Bezug) – das ist genau die Schicht, die
+ein MCP-Server aufrufen kann. Es kommt also **keine** doppelte Logik dazu, nur
+eine zweite Tür zur vorhandenen.
+
+Auflagen aus der Sicherheitsperspektive (das Projekt ist inzwischen geprüft,
+siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
+
+1. **Der MCP-Server gibt Daten preis, die die Web-Oberfläche schützt.** Er
+   braucht daher ein **eigenes, strengeres Auth-Verfahren** – nicht die
+   Web-Sitzung, sondern einen **eigenen Token** (Bearer), der nur für den
+   MCP-Zugang gilt.
+2. **Read-only.** Der MCP-Server darf **ausschließlich lesen** – keine Syncs
+   auslösen, keine Daten ändern, keine Preise zurückschreiben. Sonst wäre er
+   ein Weg, den Web-Zugang zu umgehen.
+3. **Keine Geheimnisse im Antworttext.** Kein Access-/Refresh-Token, kein
+   Session-Secret, keine vollständige E-Mail-Adresse, keine Kontonummer/
+   Seriennummern im Klartext. Aggregierte Werte ja, Identifikatoren nur
+   maskiert.
+4. **Getrennter Prozess und eigener Port.** Der MCP-Server läuft nicht im
+   Web-Prozess (sonst teilt er sich die SQLite-Datei mit Schreibzugriffen) und
+   hört nur auf `127.0.0.1` – veröffentlicht wird er ausschließlich über den
+   Tunnel, mit eigenem Pfad (`/mcp`).
+5. **Rate-Limit und Body-Limit** wie beim Web-Teil.
+6. **Opt-in.** Ohne gesetzten Token läuft der MCP-Server gar nicht (kein
+   versehentlich offener Zugang).
+
+### 9.2 Technische Eckpunkte (mit Context7 geprüft)
+
+* **FastMCP 4.2.1** (Apache-2.0, Python ≥ 3.11, 9 Abhängigkeiten) – aktuell
+  unter `prefecthq/fastmcp`; die `gofastmcp`-Doku ist die ältere Linie.
+* **Transport:** `mcp.run(transport="http", stateless_http=True)` – der
+  Streamable-HTTP-Transport. **Stateless** ist hier richtig: kein
+  Session-Affinität, skaliert hinter einem Proxy, einfacher zu betreiben.
+* **Eigene Routen** sind mit `@mcp.custom_route` möglich (z. B. für einen
+  Healthcheck) – die Auth-Middleware läuft als Starlette-Middleware **vor** der
+  MCP-App.
+* **Tools** mit `@mcp.tool`, **Ressourcen** mit `@mcp.resource` (statisch) und
+  `@mcp.resource("scheme://{param}")` (Template). Für Zeitreihen sind Tools
+  mit Parametern die bessere Wahl; Resources eignen sich für den aktuellen
+  Stand.
+* **`Context`** erlaubt Logging und Progress-Meldungen an den Client.
+* **Wichtig:** FastMCP 4.x hat **keine eingebaute Bearer-Token-Authentifizierung**
+  für den Server – die Absicherung muss über eine **eigene Starlette-Middleware**
+  erfolgen (Header `Authorization: Bearer <token>`), analog zum
+  `X-OEnergy-Token`-Mechanismus der Web-App.
+
+### 9.3 Geplante Tools (erster Wurf)
+
+| Tool | Frage, die sie beantwortet |
+|---|---|
+| `status()` | Wie aktuell sind die Daten? Letzter Sync je Job, Datenstand, offene Lücken |
+| `consumption(days=7)` | Verbrauch je Tag (kWh), endgültig/provisorisch, mit und ohne Grundpreis |
+| `costs(days=30)` | Kosten je Tag und Summe, Grundpreis, Monatsprognose mit Unsicherheit |
+| `prices(hours=48)` | Preisverlauf (brutto), aktueller und nächster Slot, EPEX-Referenz |
+| `cheapest_windows(days=7)` | Die günstigsten Zeitfenster (Tag × 15-Minuten-Slot) – die klassische Frage |
+| `price_at(when)` | Der Preis zu einem bestimmten Zeitpunkt |
+| `monthly_overview(month=…)` | Verbrauch, Kosten, Durchschnittspreis eines Monats |
+| `account()` | Tarif, Grundpreis, USt, Kontostand – **ohne** Kontonummer und Adressen |
+
+Als **Ressourcen** zusätzlich: `energy://status`, `energy://today`, `energy://month`.
+
+### 9.4 Umsetzungsschritte
+
+| # | Schritt | Inhalt | Fertig, wenn |
+|---|---|---|---|
+| **M0** | Entscheidung | Transport, Token-Verfahren, Werkzeugkatalog, Freigabe durch den Maintainer | dieser Plan ist abgenommen |
+| **M1** | Abhängigkeit | `fastmcp` als optionale Extra (`[project.optional-dependencies] mcp`), damit der Kern schlank bleibt | `uv sync --extra mcp` läuft, Kern ohne fastmcp installierbar |
+| **M2** | Service-Schicht | `services/mcp_tools.py`: reine Funktionen, die `dashboard`/`costs`/`pricing` aufrufen und **maskierte**, aggregierte Rückgaben liefern (kein HTTP, keine MCP-Typen) | Unit-Tests ohne MCP-Abhängigkeit grün |
+| **M3** | MCP-Server | `src/oenergy/mcp_server.py`: FastMCP-Instanz, die Tools und Ressourcen aus M2 registriert | `uv run oenergy mcp` startet, `tools/list` zeigt die Katalog |
+| **M4** | Authentifizierung | Starlette-Middleware: `Authorization: Bearer <MCP_TOKEN>` – zeitkonstanter Vergleich, 401 ohne Token, Rate-Limit | ohne Token 401, mit Token 200 (auch im Test) |
+| **M5** | CLI und Betrieb | `oenergy mcp --port 8001`; Compose-Profil `mcp`; Port nur auf Loopback; eigener Token in der `.env` (`MCP_TOKEN`, per `oenergy generate-mcp-token`) | Container läuft, Healthcheck ok |
+| **M6** | Tests | Tests für die Werkzeugfunktionen (M2) und für die Auth-Middleware (M4), ein Test mit einem echten MCP-Client (FastMCP-Client gegen den Server) | `pytest` grün |
+| **M7** | Doku | README-Abschnitt „MCP-Schnittstelle“, SECURITY.md (Was der MCP-Zugang darf), AGENTS.md | Doku beschreibt den Ist-Zustand |
+| **M8** | Veröffentlichung | Optional: eigener Tunnel-Pfad `/mcp` und Freigabe im Betrieb | von außen erreichbar, mit Token |
+
+### 9.5 Offene Punkte für die Entscheidung
+
+* **Port/Pfad:** eigener Port (8001) mit eigenem Tunnel-Eintrag, oder `/mcp`
+  unter dem bestehenden Port? (Empfehlung: **eigener Port**, damit die
+  Web-Sicherheitsmechanismen nicht ausgehebelt werden.)
+* **Wie kommt der Agent an den Token?** Per `.env` (Datei) oder über einen
+  MCP-Client mit eigener Anmeldung? (Empfehlung: `.env` – passend zum
+  `AUTH_BYPASS_TOKEN`-Muster.)
+* **Soll der MCP-Server die Daten bei Bedarf aktualisieren** (also einen Sync
+  auslösen)? (Empfehlung: **nein** – read-only; die Daten sind spätestens
+  15 Minuten alt.)
+* **Ein Token oder mehrere?** (Empfehlung: **einer**, mit Rotation über
+  `oenergy generate-mcp-token`.)
+
+### 9.6 Risiken
+
+| Risiko | Gegenmaßnahme |
+|---|---|
+| Der MCP-Zugang wird zum Datenabfluss (Adresse, Kontonummer) | Maskierung in der Service-Schicht (M2), keine Identifikatoren in den Antworten |
+| Der MCP-Server umgeht die Web-Anmeldung | eigener Token, eigener Prozess, eigener Port, Rate-Limit |
+| Der MCP-Server wird zum Schreibpfad | strikt read-only, keine Tools mit Schreibwirkung |
+| Der Tunnel macht den MCP-Port öffentlich | Token-Pflicht, Rate-Limit, Healthcheck ohne Daten |
+| Abhängigkeit `fastmcp` bläht das Projekt auf | als **optionales Extra**, nicht als Pflicht |
