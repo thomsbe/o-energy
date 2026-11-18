@@ -32,3 +32,4 @@ probe.json
 # Lokale Exporte und Diagnose-Ausgaben
 *.json.gz
 diagnose.json
+*.bundle
