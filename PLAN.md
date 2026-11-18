@@ -385,6 +385,17 @@ bereits sauber in `services/` (ohne HTTP-Bezug) – das ist genau die Schicht, d
 ein MCP-Server aufrufen kann. Es kommt also **keine** doppelte Logik dazu, nur
 eine zweite Tür zur vorhandenen.
 
+### 9.0 Entscheidungen des Maintainers (18.11.2026)
+
+| Frage | Entscheidung |
+|---|---|
+| **Transport** | HTTP (Streamable HTTP) am Pfad **`/mcp`** im bestehenden Web-Prozess – kein eigener Port, keine zusätzliche Tunnel-Regel |
+| **Zugriff** | **eigener Bearer-Token** (`MCP_TOKEN`), unabhängig vom Web-Passwort und vom `X-OEnergy-Token` |
+| **Rechte** | **ausschließlich lesen** – keine Aktionen, keine Schreibzugriffe |
+| **Datenumfang** | aggregierte Auswertungen; **keine** Identifikatoren (Adresse, Kontonummer, Zähler-/MaLo-Nummern, E-Mail) in den Antworten |
+| **Aktualität** | der MCP-Server liest **nur** aus der Datenbank – er löst **keinen** Sync aus (die Daten sind spätestens 15 Minuten alt) |
+| **Aktivierung** | opt-in: ohne gesetzten Token antwortet `/mcp` mit 401 und es wird kein Server gestartet |
+
 Auflagen aus der Sicherheitsperspektive (das Projekt ist inzwischen geprüft,
 siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
 
@@ -392,9 +403,14 @@ siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
    braucht daher ein **eigenes, strengeres Auth-Verfahren** – nicht die
    Web-Sitzung, sondern einen **eigenen Token** (Bearer), der nur für den
    MCP-Zugang gilt.
-2. **Read-only.** Der MCP-Server darf **ausschließlich lesen** – keine Syncs
-   auslösen, keine Daten ändern, keine Preise zurückschreiben. Sonst wäre er
-   ein Weg, den Web-Zugang zu umgehen.
+2. **Streng read-only.** Der MCP-Server darf **ausschließlich lesen**:
+   * keine Tools, die einen Sync auslösen (`run_job`, `sync all`, …),
+   * keine Tools, die Daten ändern (Import, Preis-Import, Löschen),
+   * keine Schreibzugriffe auf die Datenbank – auch nicht indirekt.
+   Umgesetzt wird das nicht nur durch Verzicht, sondern **technisch**: die
+   MCP-Werkzeuge bekommen eine Session, die nur **lesende** Abfragen zulässt
+   (kein `add`/`commit`, nur `select`). Damit kann ein Fehler in der
+   Werkzeugimplementierung keine Daten verändern.
 3. **Keine Geheimnisse im Antworttext.** Kein Access-/Refresh-Token, kein
    Session-Secret, keine vollständige E-Mail-Adresse, keine Kontonummer/
    Seriennummern im Klartext. Aggregierte Werte ja, Identifikatoren nur
@@ -444,15 +460,19 @@ siehe `REVIEW_1.md`/`REVIEW_1_OK.md`):
 
 Als **Ressourcen** zusätzlich: `energy://status`, `energy://today`, `energy://month`.
 
+**Ausdrücklich nicht enthalten** (und auch nicht später geplant):
+`run_sync`, `import_data`, `set_password`, `generate_token`, `delete_*`,
+`update_*` – der MCP-Zugang liest, er handelt nicht.
+
 ### 9.4 Umsetzungsschritte
 
 | # | Schritt | Inhalt | Fertig, wenn |
 |---|---|---|---|
 | **M0** | Entscheidung | Transport, Token-Verfahren, Werkzeugkatalog, Freigabe durch den Maintainer | dieser Plan ist abgenommen |
 | **M1** | Abhängigkeit | `fastmcp` als optionale Extra (`[project.optional-dependencies] mcp`), damit der Kern schlank bleibt | `uv sync --extra mcp` läuft, Kern ohne fastmcp installierbar |
-| **M2** | Service-Schicht | `services/mcp_tools.py`: reine Funktionen, die `dashboard`/`costs`/`pricing` aufrufen und **maskierte**, aggregierte Rückgaben liefern (kein HTTP, keine MCP-Typen) | Unit-Tests ohne MCP-Abhängigkeit grün |
-| **M3** | MCP-Server | `src/oenergy/mcp_server.py`: FastMCP-Instanz, die Tools und Ressourcen aus M2 registriert | `uv run oenergy mcp` startet, `tools/list` zeigt die Katalog |
-| **M4** | Authentifizierung | Starlette-Middleware: `Authorization: Bearer <MCP_TOKEN>` – zeitkonstanter Vergleich, 401 ohne Token, Rate-Limit | ohne Token 401, mit Token 200 (auch im Test) |
+| **M2** | Service-Schicht | `services/mcp_tools.py`: reine Funktionen, die `dashboard`/`costs`/`pricing` aufrufen und **maskierte**, aggregierte Rückgaben liefern (kein HTTP, keine MCP-Typen). Die Funktionen bekommen eine **lesende** Session (kein `add`/`commit`) | Unit-Tests ohne MCP-Abhängigkeit grün |
+| **M3** | MCP-Server | `src/oenergy/mcp_server.py`: FastMCP-Instanz, die Tools und Ressourcen aus M2 registriert; Einhängen in die FastAPI-App per `app.mount("/mcp", mcp.http_app(path="/mcp"))` mit `lifespan=mcp_app.lifespan` (sonst bricht die Verbindung ab) | `tools/list` zeigt den Katalog, `mcp.http_app()` wird korrekt eingehängt |
+| **M4** | Authentifizierung | Eigene Middleware **nur für `/mcp`**: `Authorization: Bearer <MCP_TOKEN>` – zeitkonstanter Vergleich, 401 ohne/falschen Token, Rate-Limit, Body-Limit. Die Web-Anmeldung wird davon **nicht** berührt (und umgekehrt) | ohne Token 401, mit Token 200; die Web-Login-Seite bleibt erreichbar |
 | **M5** | Betrieb | MCP läuft **im Web-Prozess** unter `/mcp` (`app.mount`); eigener Token in der `.env` (`MCP_TOKEN`, per `oenergy generate-mcp-token`); optional ein separates Compose-Profil `mcp` mit eigenem Port, falls der MCP-Zugang doch getrennt laufen soll | `/mcp` antwortet mit Token, ohne Token 401 |
 | **M6** | Tests | Tests für die Werkzeugfunktionen (M2) und für die Auth-Middleware (M4), ein Test mit einem echten MCP-Client (FastMCP-Client gegen den Server) | `pytest` grün |
 | **M7** | Doku | README-Abschnitt „MCP-Schnittstelle“, SECURITY.md (Was der MCP-Zugang darf), AGENTS.md | Doku beschreibt den Ist-Zustand |
@@ -489,7 +509,7 @@ Als **Ressourcen** zusätzlich: `energy://status`, `energy://today`, `energy://m
 |---|---|
 | Der MCP-Zugang wird zum Datenabfluss (Adresse, Kontonummer) | Maskierung in der Service-Schicht (M2), keine Identifikatoren in den Antworten |
 | Der MCP-Pfad umgeht die Web-Anmeldung | eigene Middleware für `/mcp` mit eigenem Token – der Web-Passwort-Login gilt dort nicht |
-| Der MCP-Server umgeht die Web-Anmeldung | eigener Token, eigener Prozess, eigener Port, Rate-Limit |
-| Der MCP-Server wird zum Schreibpfad | strikt read-only, keine Tools mit Schreibwirkung |
+| Der MCP-Server umgeht die Web-Anmeldung | eigener Token mit eigener Middleware für `/mcp`, eigenes Rate-Limit – der Web-Zugang gilt dort nicht |
+| Der MCP-Server wird zum Schreibpfad | strikt read-only: keine Tools mit Schreibwirkung **und** eine Session, die nur lesende Abfragen zulässt (kein `add`/`commit`) |
 | Der Tunnel macht den MCP-Port öffentlich | Token-Pflicht, Rate-Limit, Healthcheck ohne Daten |
 | Abhängigkeit `fastmcp` bläht das Projekt auf | als **optionales Extra**, nicht als Pflicht |
