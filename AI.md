@@ -17,9 +17,13 @@ die Veröffentlichung verantwortet.
   geprüft und dann mit einer sprechenden Nachricht (`feat:`, `fix:`, `docs:`)
   committet.
 * **Die CI ist das Sicherheitsnetz.** Bei jedem Push laufen Linting, Formatierung,
-  81 Tests, der Paketbau und der Docker-Build. Ein Commit, der die CI nicht
-  besteht, ist kein guter Commit – das hat sich in diesem Projekt mehrfach bewährt
-  (die CI hat Linting-Fehler gefunden, die lokal übersehen wurden).
+  81 Tests, der Paketbau, ein Secret-Scan (gitleaks) und der Docker-Build. Ein
+  Commit, der die CI nicht besteht, ist kein guter Commit – das hat sich in
+  diesem Projekt mehrfach bewährt (die CI hat Linting-Fehler gefunden, die lokal
+  übersehen wurden).
+* **Die Commits sind signiert** (SSH-Signatur) und über
+  [.github/CODEOWNERS](.github/CODEOWNERS) ist festgehalten, dass jede Änderung
+  vom Maintainer reviewed werden muss.
 * **Die harten Fakten sind live verifiziert.** Die Angaben zur Octopus-API in
   [AGENTS.md](AGENTS.md) § 5 stammen aus Abfragen am echten Konto, nicht aus
   Annahmen. Das ist die wichtigste Barriere gegen „halluzinierte“ API-Nutzung.

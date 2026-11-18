@@ -41,6 +41,24 @@ jobs:
       - name: Paket bauen
         run: uv build
 
+  secrets:
+    name: Secret-Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # die ganze Historie - Geheimnisse landen oft in alten Commits
+          fetch-depth: 0
+
+      - name: Auf versehentlich committete Geheimnisse prüfen (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # in einem öffentlichen Repo reichen die eigenen Commits
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
   docker:
     name: Docker-Image
     runs-on: ubuntu-latest

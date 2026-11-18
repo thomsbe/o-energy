@@ -396,9 +396,11 @@ uv run ruff check .      # Linting
 uv run ruff format .     # Formatierung
 ```
 
-Die CI (GitHub Actions) prüft bei jedem Push Linting, Formatierung, Tests und
-den Paketbau. Fehlerberichte und Wünsche gibt es über die
-[Issue-Vorlagen](.github/ISSUE_TEMPLATE).
+Die CI (GitHub Actions) prüft bei jedem Push Linting, Formatierung, Tests, den
+Paketbau, das Docker-Image und mit **gitleaks** die Historie auf versehentlich
+committete Geheimnisse. Jede Änderung braucht ein Review des Maintainers
+([CODEOWNERS](.github/CODEOWNERS)), die Commits sind signiert. Fehlerberichte
+und Wünsche gibt es über die [Issue-Vorlagen](.github/ISSUE_TEMPLATE).
 
 ## Projektstruktur
 

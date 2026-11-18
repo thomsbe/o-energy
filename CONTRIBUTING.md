@@ -65,6 +65,20 @@ nicht, ob und womit gearbeitet wurde, sondern dass:
 
 Erwähne im PR kurz, wenn eine KI beteiligt war – das hilft beim Review.
 
+## Reviews und Signaturen
+
+* Jede Änderung braucht ein Review von **@thomsbe** (siehe
+  [.github/CODEOWNERS](.github/CODEOWNERS)).
+* Die Commits im `main` sind **SSH-signiert** – GitHub zeigt sie als „Verified“.
+  Für eigene Commits genügt:
+  ```bash
+  git config commit.gpgsign true
+  git config gpg.format ssh
+  git config user.signingkey ~/.ssh/id_ed25519.pub
+  ```
+* Die CI prüft die Historie mit **gitleaks** – committete Zugangsdaten fallen
+  auf.
+
 ## API-Anfragen
 
 Die Octopus-API ist undokumentiert und authorizationsabhängig. Bevor du eine

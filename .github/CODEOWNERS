@@ -1,0 +1,23 @@
+# Wer muss Änderungen reviewed haben, bevor sie gemergt werden.
+# Das Repository hat genau einen Maintainer - ohne sein Review kein Merge.
+
+# Standard: alles
+*                       @thomsbe
+
+# Kern der Anwendung
+/src/oenergy/           @thomsbe
+/alembic/               @thomsbe
+
+# Betrieb und Veröffentlichung
+/docker-compose.yml     @thomsbe
+/Dockerfile             @thomsbe
+/.github/               @thomsbe
+/pyproject.toml         @thomsbe
+/uv.lock                @thomsbe
+
+# Dokumentation
+/README.md              @thomsbe
+/AGENTS.md              @thomsbe
+/AI.md                  @thomsbe
+/SECURITY.md            @thomsbe
+/CHANGELOG.md           @thomsbe
