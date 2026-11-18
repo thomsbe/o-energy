@@ -67,12 +67,13 @@ Erwähne im PR kurz, wenn eine KI beteiligt war – das hilft beim Review.
 
 ## Reviews und Signaturen
 
-* `main` ist geschützt: Die drei CI-Jobs (Linting/Tests, Secret-Scan,
-  Docker-Build) müssen grün sein, Force-Push ist gesperrt.
+* `main` ist über eine **Ruleset** geschützt: Die drei CI-Jobs
+  (Linting/Tests, Secret-Scan, Docker-Build) müssen grün sein, Force-Push ist
+  gesperrt.
 * **PRs von außen** (auch von Dependabot) brauchen eine Freigabe von **@thomsbe**
   – siehe [.github/CODEOWNERS](.github/CODEOWNERS).
-* Der Maintainer arbeitet selbst direkt auf `main` (er ist Admin und darf den
-  Schutz umgehen) – deshalb sind eigene Änderungen normale, signierte Commits.
+* Der Maintainer ist als Bypass-Akteur eingetragen: eigene Änderungen sind
+  normale, signierte Commits direkt auf `main`.
 * Die Commits im `main` sind **SSH-signiert** – GitHub zeigt sie als „Verified“.
   Für eigene Commits genügt:
   ```bash
