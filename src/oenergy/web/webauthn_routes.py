@@ -80,7 +80,7 @@ async def passkey_register_options(request: Request, session: Session = Depends(
 async def passkey_register_verify(request: Request, session: Session = Depends(get_session)):
     if not current_user(request):
         return JSONResponse({"error": "nicht angemeldet"}, status_code=401)
-    context, settings = _context(request)
+    context, _settings = _context(request)
     payload = await request.json()
     challenge = _challenge_from_session(request)
     if not challenge:

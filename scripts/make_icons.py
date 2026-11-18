@@ -27,7 +27,9 @@ def background(size: int) -> Image.Image:
     draw = ImageDraw.Draw(image)
     for y in range(size):
         ratio = y / max(size - 1, 1)
-        colour = tuple(int(top + (bottom - top) * ratio) for top, bottom in zip(BG_TOP, BG_BOTTOM))
+        colour = tuple(
+            int(top + (bottom - top) * ratio) for top, bottom in zip(BG_TOP, BG_BOTTOM, strict=True)
+        )
         draw.line([(0, y), (size, y)], fill=colour)
     return image
 
@@ -41,7 +43,6 @@ def octopus(image: Image.Image, scale: float = 1.0, offset: float = 0.0) -> None
 
     head_r = s * 0.20 * scale
     body_top = cy - head_r * 1.05
-    body_bottom = cy + head_r * 1.25
 
     # Tentakel
     for index, offset_x in enumerate((-0.72, -0.42, -0.12, 0.18, 0.48, 0.76)):

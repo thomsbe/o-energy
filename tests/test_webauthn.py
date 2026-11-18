@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 
 from oenergy.config import get_settings
 from oenergy.services.webauthn_service import (
@@ -63,10 +64,8 @@ def test_credentials_are_stored_and_listed(session) -> None:
 
     # ohne echten Authenticator lässt sich die Registrierung nicht abschließen -
     # die Hilfsfunktion meldet den Fehler sauber
-    try:
+    with contextlib.suppress(Exception):
         finish_registration(session, context, {"invalid": True}, challenge, label="Test")
-    except Exception:
-        pass
 
     assert isinstance(list_credentials(session), list)
 
