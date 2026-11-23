@@ -136,6 +136,7 @@ def do_logout(request: Request) -> Response:
 
 @router.get("/", response_class=HTMLResponse)
 def page_dashboard(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    status = status_overview(session)
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -147,6 +148,8 @@ def page_dashboard(request: Request, session: Session = Depends(get_session)) ->
             "costs": dashboard.cost_summary(session, get_settings()),
             "heatmap": dashboard.heatmap_data(session, get_settings(), days=7),
             "cheapest": dashboard.cheapest_windows(session, get_settings()),
+            "last_success": status["last_success"],
+            "job_status": status["jobs_list"],
             "now": to_local(datetime.utcnow(), _tz()),
         },
     )

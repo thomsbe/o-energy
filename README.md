@@ -4,7 +4,7 @@
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blau.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 
-> **Version 1.5.0** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
+> **Version 1.5.5** – Änderungen siehe [CHANGELOG.md](CHANGELOG.md). Lizenz: MIT.
 
 Eigene Web-App für **Octopus Energy Germany** (Dynamic Octopus): Die App fragt die
 Kraken-GraphQL-API regelmäßig ab, speichert Verbrauch, Zählerstände, Preise und
@@ -16,6 +16,31 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
 │ (Octopus)  │   alle 15 Min     │ (FastAPI)    │             │             │
 └────────────┘                   └──────────────┘             └──────────────┘
 ```
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-desktop.png" alt="Dashboard (Desktop, Dark Mode)" width="860"><br>
+  <em>Dashboard – Desktop, Dark Mode</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-mobile.png" alt="Dashboard (Mobil)" width="260">
+  <img src="docs/screenshots/prices-mobile.png" alt="Preise (Mobil)" width="260">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/prices-desktop.png" alt="Preise und Preis-Matrix" width="860"><br>
+  <em>Preise und Preis-Matrix</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-light.png" alt="Dashboard im Light Mode" width="860"><br>
+  <em>Light Mode</em>
+</p>
+
+Alle Screenshots stammen aus der Demo-Datenbank (`uv run oenergy seed`)
+und enthalten keine echten Zugangs- oder Verbrauchsdaten.
 
 ## Funktionsumfang
 
@@ -43,6 +68,8 @@ Kosten in SQLite und zeigt alles in einer schnellen HTMX-WebUI mit Chart.js.
 * **MCP-Schnittstelle**: optionaler, strikt lesender Zugang für KI-Agenten unter
   `/mcp` (FastMCP, Streamable HTTP) mit eigenem Bearer-Token – ohne
   Identifikatoren in den Antworten.
+* **Material-You-3-Oberfläche**: adaptiver Navigation Drawer/Rail/Bottom-Nav,
+  Light/Dark Mode, PWA-Safe-Areas und Chart.js-Diagramme im M3-Farbsystem.
 
 ## Schnellstart (lokal)
 

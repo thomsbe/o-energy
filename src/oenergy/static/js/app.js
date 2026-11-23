@@ -6,9 +6,19 @@
   const root = document.documentElement;
 
   // ---------------------------------------------------------------- theme
+  function themeColor() {
+    return getComputedStyle(root).getPropertyValue("--md-surface").trim() || "#0e1512";
+  }
+
+  function updateThemeColor() {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) { meta.setAttribute("content", themeColor()); }
+  }
+
   function applyTheme(theme) {
     root.setAttribute("data-theme", theme);
     localStorage.setItem(THEME_KEY, theme);
+    updateThemeColor();
     redrawCharts();
   }
 
@@ -19,6 +29,7 @@
       applyTheme(prefersLight ? "light" : "dark");
     } else {
       root.setAttribute("data-theme", stored);
+      updateThemeColor();
     }
     const button = document.getElementById("theme-toggle");
     if (button) {
@@ -65,17 +76,84 @@
   // --------------------------------------------------------------- helpers
   const charts = {};
 
-  function gridColor() {
-    return getComputedStyle(root).getPropertyValue("--border-soft").trim() || "#232b36";
-  }
-
-  function textColor() {
-    return getComputedStyle(root).getPropertyValue("--muted").trim() || "#8b949e";
-  }
-
   function cssVar(name, fallback) {
     const value = getComputedStyle(root).getPropertyValue(name).trim();
     return value || fallback;
+  }
+
+  function gridColor() {
+    return cssVar("--md-outline-variant", "#3f4946");
+  }
+
+  function textColor() {
+    return cssVar("--md-on-surface-variant", "#bec9c5");
+  }
+
+  function fontFamily() {
+    return getComputedStyle(document.body).fontFamily || "system-ui, sans-serif";
+  }
+
+  function withAlpha(color, alpha) {
+    var value = (color || "").trim();
+    if (!value) return "rgba(0,0,0," + alpha + ")";
+    if (value.charAt(0) === "#") {
+      var hex = value.slice(1);
+      if (hex.length === 3) {
+        hex = hex.split("").map(function (part) { return part + part; }).join("");
+      }
+      var number = parseInt(hex, 16);
+      var r = (number >> 16) & 255;
+      var g = (number >> 8) & 255;
+      var b = number & 255;
+      return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+    }
+    if (value.indexOf("rgb") === 0) {
+      return value.replace(/rgba?\(([^)]+)\)/, function (_match, body) {
+        var parts = body.split(",").map(function (part) { return part.trim(); });
+        return "rgba(" + parts[0] + "," + parts[1] + "," + parts[2] + "," + alpha + ")";
+      });
+    }
+    return value;
+  }
+
+  function areaFill(color, alpha) {
+    return function (context) {
+      var chart = context.chart;
+      var area = chart.chartArea;
+      if (!area) return withAlpha(color, alpha);
+      var gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      gradient.addColorStop(0, withAlpha(color, alpha));
+      gradient.addColorStop(1, withAlpha(color, 0));
+      return gradient;
+    };
+  }
+
+  function mergeOptions(base, extra) {
+    var out = Object.assign({}, base);
+    if (!extra) return out;
+    Object.keys(extra).forEach(function (key) {
+      var value = extra[key];
+      var current = out[key];
+      if (
+        value && typeof value === "object" && !Array.isArray(value) &&
+        current && typeof current === "object" && !Array.isArray(current)
+      ) {
+        out[key] = Object.assign({}, current, value);
+        Object.keys(value).forEach(function (nestedKey) {
+          var nestedValue = value[nestedKey];
+          var nestedCurrent = current[nestedKey];
+          if (
+            nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue) &&
+            nestedCurrent && typeof nestedCurrent === "object" && !Array.isArray(nestedCurrent)
+          ) {
+            out[key][nestedKey] = Object.assign({}, nestedCurrent, nestedValue);
+          }
+        });
+      } else {
+        out[key] = value;
+      }
+    });
+    return out;
   }
 
   function clock(iso) {
@@ -109,37 +187,52 @@
   }
 
   function baseOptions(extra) {
-    return Object.assign(
-      {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: {
-            labels: { color: textColor(), boxWidth: 12, boxHeight: 12, usePointStyle: true },
-          },
-          tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
-            titleColor: "#e6edf3",
-            bodyColor: "#c9d1d9",
-            padding: 10,
+    var base = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 320 },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            color: textColor(),
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 16,
+            font: { size: 12, family: fontFamily() },
           },
         },
-        scales: {
-          x: {
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 24 },
-          },
-          y: {
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), padding: 6 },
-          },
+        tooltip: {
+          backgroundColor: cssVar("--md-surface-container-high", "#242b28"),
+          borderColor: gridColor(),
+          borderWidth: 1,
+          cornerRadius: 16,
+          padding: 12,
+          titleColor: cssVar("--md-on-surface", "#dde4e0"),
+          bodyColor: textColor(),
+          displayColors: true,
+          boxPadding: 6,
+          usePointStyle: true,
+          titleFont: { size: 12.5, family: fontFamily(), weight: "600" },
+          bodyFont: { size: 12.5, family: fontFamily() },
         },
       },
-      extra || {}
-    );
+      scales: {
+        x: {
+          grid: { color: gridColor(), drawTicks: false, lineWidth: 1, borderDash: [3, 6] },
+          border: { display: false },
+          ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 24, font: { size: 11, family: fontFamily() } },
+        },
+        y: {
+          grid: { color: gridColor(), drawTicks: false, lineWidth: 1, borderDash: [3, 6] },
+          border: { display: false },
+          ticks: { color: textColor(), padding: 8, font: { size: 11, family: fontFamily() } },
+        },
+      },
+    };
+    return mergeOptions(base, extra || {});
   }
 
   function upsert(canvasId, config) {
@@ -171,6 +264,9 @@
     const data = await getJSON("/api/chart/prices");
     if (!data || !data.customer || !data.customer.length) return;
 
+    const primary = cssVar("--md-primary", "#6fdbc8");
+    const secondary = cssVar("--md-secondary", "#b1ccc5");
+
     const labels = data.customer.map(function (entry) {
       return clock(entry.start);
     });
@@ -193,34 +289,30 @@
             data: data.customer.map(function (entry) {
               return entry.gross !== null && entry.gross !== undefined ? entry.gross : entry.net;
             }),
-            borderColor: cssVar("--accent", "#3fb950"),
-            backgroundColor: "rgba(63,185,80,.14)",
-            borderWidth: 2,
+            borderColor: primary,
+            backgroundColor: areaFill(primary, 0.30),
+            borderWidth: 2.5,
             pointRadius: 0,
-            pointHoverRadius: 4,
+            pointHoverRadius: 5,
             fill: true,
-            tension: 0.25,
+            tension: 0.35,
           },
           {
             label: "EPEX Spot (netto)",
             data: epexValues,
-            borderColor: cssVar("--info", "#58a6ff"),
-            borderWidth: 1.5,
-            borderDash: [4, 4],
+            borderColor: secondary,
+            borderWidth: 1.6,
+            borderDash: [5, 5],
             pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.25,
+            pointHoverRadius: 5,
+            tension: 0.3,
             spanGaps: true,
           },
         ],
       },
       options: baseOptions({
         plugins: {
-          legend: { labels: { color: textColor(), usePointStyle: true } },
           tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
             callbacks: {
               title: function (items) {
                 const entry = data.customer[items[0].dataIndex];
@@ -233,10 +325,8 @@
           },
         },
         scales: {
-          x: { grid: { color: gridColor(), drawTicks: false }, ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 24 } },
           y: {
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), callback: function (value) { return value + " ct"; } },
+            ticks: { callback: function (value) { return value + " ct"; } },
           },
         },
       }),
@@ -259,7 +349,11 @@
     });
     times.sort();
 
-    const palette = [cssVar("--info", "#58a6ff"), cssVar("--accent", "#3fb950"), cssVar("--warn", "#d29922")];
+    const palette = [
+      cssVar("--md-primary", "#6fdbc8"),
+      cssVar("--md-secondary", "#b1ccc5"),
+      cssVar("--md-tertiary", "#f2c94c"),
+    ];
     const datasets = dayKeys.map(function (day, index) {
       const lookup = {};
       data.series[day].forEach(function (point) {
@@ -275,11 +369,11 @@
         }),
         borderColor: palette[index % palette.length],
         backgroundColor: "transparent",
-        borderWidth: meta && meta.is_final ? 2 : 1.5,
+        borderWidth: meta && meta.is_final ? 2.5 : 1.8,
         borderDash: meta && meta.is_final ? [] : [5, 4],
         pointRadius: 0,
-        pointHoverRadius: 4,
-        tension: 0.3,
+        pointHoverRadius: 5,
+        tension: 0.35,
         spanGaps: true,
       };
     });
@@ -289,11 +383,7 @@
       data: { labels: times.map(clock), datasets: datasets },
       options: baseOptions({
         plugins: {
-          legend: { labels: { color: textColor(), usePointStyle: true } },
           tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
             callbacks: {
               label: function (item) {
                 return item.dataset.label + ": " + (item.parsed.y === null ? "–" : item.parsed.y.toFixed(3) + " kWh");
@@ -302,10 +392,9 @@
           },
         },
         scales: {
-          x: { grid: { color: gridColor(), drawTicks: false }, ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 18 } },
+          x: { ticks: { autoSkipPadding: 18 } },
           y: {
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), callback: function (value) { return value + " kWh"; } },
+            ticks: { callback: function (value) { return value + " kWh"; } },
           },
         },
       }),
@@ -317,8 +406,9 @@
     const data = await getJSON("/api/chart/costs");
     if (!data || !data.labels || !data.labels.length) return;
 
-    const finalColors = cssVar("--info", "#58a6ff");
-    const provisionalColors = cssVar("--warn", "#d29922");
+    const finalColors = cssVar("--md-primary", "#6fdbc8");
+    const provisionalColors = cssVar("--md-tertiary", "#f2c94c");
+    const standingColor = withAlpha(cssVar("--md-secondary", "#b1ccc5"), 0.45);
 
     upsert("chart-costs", {
       type: "bar",
@@ -331,25 +421,25 @@
             backgroundColor: data.is_final.map(function (isFinal) {
               return isFinal ? finalColors : provisionalColors;
             }),
-            borderRadius: 3,
+            borderRadius: 8,
+            borderSkipped: false,
+            maxBarThickness: 26,
             stack: "cost",
           },
           {
             label: "Grundpreis",
             data: data.standing_cost,
-            backgroundColor: "rgba(139,148,158,.45)",
-            borderRadius: 3,
+            backgroundColor: standingColor,
+            borderRadius: 8,
+            borderSkipped: false,
+            maxBarThickness: 26,
             stack: "cost",
           },
         ],
       },
       options: baseOptions({
         plugins: {
-          legend: { labels: { color: textColor(), usePointStyle: true } },
           tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
             callbacks: {
               label: function (item) {
                 return item.dataset.label + ": " + item.parsed.y.toFixed(2) + " €";
@@ -358,11 +448,10 @@
           },
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 12 } },
+          x: { stacked: true, grid: { display: false }, ticks: { autoSkipPadding: 12 } },
           y: {
             stacked: true,
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), callback: function (value) { return value + " €"; } },
+            ticks: { callback: function (value) { return value + " €"; } },
           },
         },
       }),
@@ -375,6 +464,8 @@
     const data = await getJSON("/api/chart/consumption-price");
     if (!data || !data.labels || !data.labels.length) return;
 
+    const primary = cssVar("--md-primary", "#6fdbc8");
+    const tertiary = cssVar("--md-tertiary", "#f2c94c");
     const labels = data.labels.map(clock);
     upsert("chart-consumption-price", {
       type: "bar",
@@ -386,10 +477,12 @@
             data: data.kwh,
             type: "bar",
             yAxisID: "y",
-            backgroundColor: cssVar("--info", "#58a6ff") + "66",
-            borderColor: cssVar("--info", "#58a6ff"),
+            backgroundColor: withAlpha(primary, 0.55),
+            borderColor: primary,
             borderWidth: 0,
-            borderRadius: 2,
+            borderRadius: 8,
+            borderSkipped: false,
+            maxBarThickness: 18,
             spanGaps: true,
           },
           {
@@ -397,12 +490,12 @@
             data: data.price,
             type: "line",
             yAxisID: "y1",
-            borderColor: cssVar("--warn", "#d29922"),
-            backgroundColor: cssVar("--warn", "#d29922") + "22",
-            borderWidth: 1.8,
+            borderColor: tertiary,
+            backgroundColor: areaFill(tertiary, 0.18),
+            borderWidth: 2,
             pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.3,
+            pointHoverRadius: 5,
+            tension: 0.35,
             fill: true,
             spanGaps: true,
           },
@@ -411,11 +504,7 @@
       options: baseOptions({
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { labels: { color: textColor(), usePointStyle: true } },
           tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
             callbacks: {
               title: function (items) {
                 return fullLabel(data.labels[items[0].dataIndex]);
@@ -434,17 +523,16 @@
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 30 },
+            ticks: { autoSkipPadding: 30 },
           },
           y: {
             position: "left",
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), callback: function (value) { return value + " kWh"; } },
+            ticks: { callback: function (value) { return value + " kWh"; } },
           },
           y1: {
             position: "right",
             grid: { drawOnChartArea: false },
-            ticks: { color: cssVar("--warn", "#d29922"), callback: function (value) { return value + " ct"; } },
+            ticks: { color: tertiary, callback: function (value) { return value + " ct"; } },
           },
         },
       }),
@@ -459,8 +547,8 @@
     const data = await getJSON("/api/chart/monthly" + query);
     if (!data || !data.days || !data.days.length) return;
 
-    const finalColor = cssVar("--info", "#58a6ff");
-    const provisionalColor = cssVar("--warn", "#d29922");
+    const finalColor = cssVar("--md-primary", "#6fdbc8");
+    const provisionalColor = cssVar("--md-tertiary", "#f2c94c");
     upsert("chart-monthly", {
       type: "bar",
       data: {
@@ -472,7 +560,9 @@
             backgroundColor: data.days.map(function (day) {
               return day.is_final ? finalColor : provisionalColor;
             }),
-            borderRadius: 3,
+            borderRadius: 8,
+            borderSkipped: false,
+            maxBarThickness: 26,
           },
         ],
       },
@@ -480,9 +570,6 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#10151c",
-            borderColor: gridColor(),
-            borderWidth: 1,
             callbacks: {
               title: function (items) {
                 const day = data.days[items[0].dataIndex];
@@ -499,10 +586,9 @@
           },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: textColor(), maxRotation: 0, autoSkipPadding: 12 } },
+          x: { grid: { display: false }, ticks: { autoSkipPadding: 12 } },
           y: {
-            grid: { color: gridColor(), drawTicks: false },
-            ticks: { color: textColor(), callback: function (value) { return value + " kWh"; } },
+            ticks: { callback: function (value) { return value + " kWh"; } },
           },
         },
       }),
@@ -512,6 +598,14 @@
   // ------------------------------------------------------------------ init
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
+    if (window.Chart) {
+      Chart.defaults.font.family = fontFamily();
+      Chart.defaults.font.size = 12;
+      Chart.defaults.color = textColor();
+    }
+    document.querySelectorAll('a[href="/logout"]').forEach(function (link) {
+      link.addEventListener("click", clearServiceWorkerCache);
+    });
     registerServiceWorker();
     renderPrices();
     renderConsumption();

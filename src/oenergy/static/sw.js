@@ -5,7 +5,7 @@
  * - Von den Seiten wird ausschliesslich die Whitelist OFFLINE_PAGES gecacht;
  *   offline zeigt der Service Worker /static/offline.html.
  */
-const CACHE = "oenergy-v2";
+const CACHE = "oenergy-v3";
 //: Nur diese Seiten werden zwischengespeichert - sie enthalten keine Daten.
 const OFFLINE_PAGES = ["/login"];
 

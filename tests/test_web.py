@@ -8,6 +8,38 @@ def test_dashboard_renders(client) -> None:
     assert "Aktueller Preis" in response.text
 
 
+def test_layout_exposes_adaptive_navigation(client) -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'class="app-nav"' in response.text
+    assert 'class="bottom-nav"' in response.text
+    assert 'aria-current="page"' in response.text
+    assert "viewport-fit=cover" in response.text
+    assert 'rel="manifest"' in response.text
+
+
+def test_dashboard_shows_last_success_immediately(client, session) -> None:
+    from datetime import datetime
+
+    from oenergy.db.models import SyncRun
+
+    now = datetime.utcnow()
+    session.add(SyncRun(job="readings", status="ok", items=96, started_at=now, finished_at=now))
+    session.commit()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "noch kein Sync" not in response.text
+    assert "letzter erfolgreicher Sync" in response.text
+
+
+def test_system_links_to_github(client) -> None:
+    response = client.get("/system")
+    assert response.status_code == 200
+    assert "github.com/thomsbe/o-energy" in response.text
+
+
 def test_all_pages_render(client) -> None:
     for path in ("/", "/verbrauch", "/preise", "/kosten", "/system"):
         response = client.get(path)

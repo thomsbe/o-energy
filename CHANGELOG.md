@@ -5,6 +5,37 @@ Alle wichtigen Änderungen an o-energy werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.5.5] – 2026-11-23
+
+### Hinzugefügt
+
+- **README-Screenshots** aus der Demo-Datenbank für Desktop, Mobil und Light Mode.
+- **GitHub-Link auf der System-Seite** inklusive Icon und Verweis auf Repository,
+  Issues und Releases.
+
+### Geändert
+
+- **Material-You-3-Designsystem**: tonale Teal/Petrol-Farbrollen als CSS-Variablen,
+  Light- und Dark-Mode, großzügige Formen, Surface-Container statt harter
+  Schatten und tabellarische Ziffern für kWh-, Euro- und Prozentwerte.
+- **Adaptive Navigation**: permanenter Navigation Drawer ab 1025 px,
+  Navigation Rail von 600–1024 px und eine feste Bottom Navigation unter
+  600 px (System bleibt über die Top App Bar erreichbar).
+- **Charts im M3-Look**: Farben aus dem Token-System, sanfte Gradient-Flächen,
+  abgerundete Balken, dezente Rasterlinien und M3-Tooltips.
+- **PWA-Feinschliff**: Safe-Area-Abstände für Notch/Home-Bar, 48-px-Touchziele,
+  `user-select: none` auf Bedienelementen und ein neuer Service-Worker-Cache
+  (`oenergy-v3`), damit Styles und Offline-Seite sicher ausgetauscht werden.
+
+### Behoben
+
+- **Preis-Matrix auf Mobile**: Die 96 15-Minuten-Zellen sprengten die Seite
+  (270 px horizontaler Überlauf). Auf Desktop passen alle 24 Stunden in die
+  Karte, auf Tablet/Mobile scrollt die Matrix innerhalb ihres Panels.
+- **Logout leert den PWA-Cache** jetzt auch über den mobilen Abmelde-Button.
+- **Datenstand-Kachel** zeigt den letzten erfolgreichen Sync schon beim ersten
+  Seitenaufbau (bisher erst nach dem HTMX-Refresh).
+
 ## [1.5.0] – 2026-11-18
 
 ### Hinzugefügt
